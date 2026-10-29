@@ -69,8 +69,10 @@ export interface Settings {
 
   /** Mask posts until a verdict arrives, so filtered posts never flash into view. */
   hideUntilChecked: boolean;
+  /** Accounts that skip every filter. */
   allowlist: string[];
-
+  /** Accounts hidden with no model call. Edited by the user, not inferred. */
+  blocklist: string[];
   /**
    * Hidden posts from one account before the timeline suggests hiding the rest.
    * The extension never mutes or blocks; those stay on X's own confirmation.
@@ -88,6 +90,11 @@ export interface TweetInput {
   isReply: boolean;
   isQuote: boolean;
   quotedText?: string;
+  /**
+   * Distance from the viewport in px. Lower runs first. Missing means the post
+   * is already on screen.
+   */
+  priority?: number;
   /** Text of the post this one answers, when that post is on the page. */
   parentText?: string;
 }
@@ -112,10 +119,16 @@ export interface Verdict {
   /** Set when classification failed; the post is left visible. */
   error?: string;
   cached?: boolean;
+  /** USD for this fresh model call. Omitted on cache hits and local decisions. */
+  cost?: number;
 }
 
 export type Message =
   | { type: 'classify'; tweets: TweetInput[] }
+  | {
+      type: 'recordLocal';
+      decisions: Array<{ id: string; filtered: boolean; reason: string }>;
+    }
   | { type: 'getSettings' }
   | { type: 'getPublicSettings' }
   | { type: 'settingsChanged' }
@@ -140,6 +153,8 @@ export type Message =
 export interface Stats {
   checked: number;
   filtered: number;
+  /** Decisions made without a model call: lists, short posts, counts, promoted, media. */
+  settledLocally: number;
   bySignal: Record<string, number>;
   inputTokens: number;
   /** USD. */

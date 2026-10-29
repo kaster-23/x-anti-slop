@@ -25,6 +25,8 @@ export async function loadSettings(): Promise<Settings> {
     ...stored,
     signals: { ...DEFAULT_SETTINGS.signals, ...stored?.signals },
     mediaFilters: { ...DEFAULT_SETTINGS.mediaFilters, ...stored?.mediaFilters },
+    allowlist: Array.isArray(stored?.allowlist) ? stored.allowlist : DEFAULT_SETTINGS.allowlist,
+    blocklist: Array.isArray(stored?.blocklist) ? stored.blocklist : DEFAULT_SETTINGS.blocklist,
     slopCategories: { ...DEFAULT_SETTINGS.slopCategories },
     slopWeights: stored?.slopWeights ? resolveWeights(stored.slopWeights) : null,
   };

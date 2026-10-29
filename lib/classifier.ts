@@ -9,17 +9,24 @@ import {
   resolveModel,
   toSlopPost,
 } from './provider';
+import { localSignature } from './prefilter';
 import { questionSignature } from './signature';
 import { redactSecrets } from './redact';
+import { QUEUE_CONCURRENCY, RequestQueue } from './request-queue';
 import { activeKey, slopThresholdsOf } from './defaults';
 import { EMPTY_STATS, statsStore } from './settings';
 import { featureVector, judgeSlop, resolveWeights, slopExceeds, type SlopCategory } from './detect/score';
 import type { Settings, Stats, TweetInput, Verdict } from './types';
 
-
-/** Jev allows 1200 req/min, so this is well inside the limit. */
-const MAX_CONCURRENCY = 6;
 const CACHE_LIMIT = 5000;
+const LOCAL_COUNTED_LIMIT = 5000;
+/** Four attempts at 2s plus the capped gaps between them. */
+const SLOT_BUDGET_MS = 12_000;
+
+const queue = new RequestQueue<CacheEntry>({
+  concurrency: QUEUE_CONCURRENCY,
+  timeoutMs: SLOT_BUDGET_MS,
+});
 
 interface CacheEntry {
   scores: Record<string, number>;
@@ -31,6 +38,8 @@ interface CacheEntry {
   /** Question set, weights, and thresholds that produced this. A mismatch re-checks. */
   sig: string;
   at: number;
+  /** Present only on a fresh model response. Not a reason to re-send the post. */
+  cost?: number;
 }
 
 const cache = new Map<string, CacheEntry>();
@@ -138,7 +147,7 @@ function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
 
 /**
  * Usage is accumulated in memory and flushed on a short timer. Writing straight
- * through would lose counts: up to MAX_CONCURRENCY classifications finish at
+ * through would lose counts: up to four classifications finish at
  * once, and each would read the same stored total before adding one to it.
  */
 let pending: Stats | null = null;
@@ -183,24 +192,123 @@ async function flushStats() {
 }
 
 function emptyDelta(): Stats {
-  return { checked: 0, filtered: 0, bySignal: {}, inputTokens: 0, cost: 0 };
+  return { checked: 0, filtered: 0, settledLocally: 0, bySignal: {}, inputTokens: 0, cost: 0 };
 }
 
 function mergeInto(target: Stats, delta: Stats) {
-  target.checked += delta.checked;
-  target.filtered += delta.filtered;
-  target.inputTokens += delta.inputTokens;
-  target.cost += delta.cost;
-  for (const [label, count] of Object.entries(delta.bySignal)) {
+  target.checked += delta.checked ?? 0;
+  target.filtered += delta.filtered ?? 0;
+  target.settledLocally = (target.settledLocally ?? 0) + (delta.settledLocally ?? 0);
+  target.inputTokens += delta.inputTokens ?? 0;
+  target.cost += delta.cost ?? 0;
+  for (const [label, count] of Object.entries(delta.bySignal ?? {})) {
     target.bySignal[label] = (target.bySignal[label] ?? 0) + count;
   }
 }
 
 async function mergeStats(delta: Stats) {
-  const stored = (await statsStore.getValue()) ?? EMPTY_STATS;
+  const stored = coerceStats(await statsStore.getValue());
   const merged = { ...stored, bySignal: { ...stored.bySignal } };
   mergeInto(merged, delta);
   await statsStore.setValue(merged);
+}
+
+export function coerceStats(stored: Partial<Stats> | null | undefined): Stats {
+  return {
+    checked: stored?.checked ?? 0,
+    filtered: stored?.filtered ?? 0,
+    settledLocally: stored?.settledLocally ?? 0,
+    bySignal: stored?.bySignal ?? {},
+    inputTokens: stored?.inputTokens ?? 0,
+    cost: stored?.cost ?? 0,
+  };
+}
+
+export interface LocalDecision {
+  id: string;
+  filtered: boolean;
+  reason?: string;
+}
+
+const countedStore = storage.defineItem<string[]>('local:localCounted', { fallback: [] });
+let countedIds = new Set<string>();
+let countedLoading: Promise<void> | undefined;
+let countedTimer: ReturnType<typeof setTimeout> | undefined;
+let localWriteQueue: Promise<unknown> = Promise.resolve();
+
+function ensureCounted(): Promise<void> {
+  countedLoading ??= (async () => {
+    const stored = await countedStore.getValue();
+    countedIds = new Set(stored ?? []);
+  })();
+  return countedLoading;
+}
+
+function scheduleCountedFlush() {
+  if (countedTimer !== undefined) return;
+  countedTimer = setTimeout(() => {
+    countedTimer = undefined;
+    const trimmed = [...countedIds].slice(-LOCAL_COUNTED_LIMIT);
+    countedIds = new Set(trimmed);
+    void countedStore.setValue(trimmed).catch((err) => {
+      console.warn(
+        '[x-anti-slop] local counter write failed',
+        redactSecrets(err instanceof Error ? err.message : String(err)),
+      );
+    });
+  }, 2000);
+}
+
+export function rememberLocalDecisions(
+  decisions: readonly LocalDecision[],
+  settings: Settings,
+): Promise<void> {
+  const run = localWriteQueue.then(() => writeLocalDecisions(decisions, settings));
+  localWriteQueue = run.catch(() => undefined);
+  return run;
+}
+
+async function writeLocalDecisions(
+  decisions: readonly LocalDecision[],
+  settings: Settings,
+): Promise<void> {
+  await ensureCounted();
+  const sig = localSignature(settings);
+  let fresh = 0;
+  let hidden = 0;
+  const bySignal: Record<string, number> = {};
+  const seen = new Set<string>();
+
+  for (const decision of decisions) {
+    if (!decision.id || seen.has(decision.id)) continue;
+    seen.add(decision.id);
+    const key = `${sig}:${decision.id}`;
+    if (countedIds.has(key)) continue;
+    countedIds.add(key);
+    fresh++;
+    if (decision.filtered) {
+      hidden++;
+      const label = (decision.reason ?? 'Local').replace(/\s*\(.*\)$/, '');
+      bySignal[label] = (bySignal[label] ?? 0) + 1;
+    }
+  }
+
+  if (fresh === 0) return;
+  scheduleCountedFlush();
+  pending ??= emptyDelta();
+  mergeInto(pending, {
+    checked: fresh,
+    filtered: hidden,
+    settledLocally: fresh,
+    bySignal,
+    inputTokens: 0,
+    cost: 0,
+  });
+  if (statsTimer !== undefined) return;
+  statsTimer = setTimeout(() => {
+    statsTimer = undefined;
+    statsQueue = statsQueue.then(flushStats).catch(() => undefined);
+  }, 1000);
 }
 
 /**
@@ -252,24 +360,6 @@ function settleError(message: string | null) {
     .catch(() => undefined);
 }
 
-let active = 0;
-const waiting: Array<() => void> = [];
-
-async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
-  // Loops rather than waking straight into the slot: a caller arriving in the
-  // gap between the release and this microtask could otherwise take it first.
-  while (active >= MAX_CONCURRENCY) {
-    await new Promise<void>((resolve) => waiting.push(resolve));
-  }
-  active++;
-  try {
-    return await fn();
-  } finally {
-    active--;
-    waiting.shift()?.();
-  }
-}
-
 /**
  * One post, one request. The style bank rides in that same call. A 30-question
  * request has the same warm latency as a 3-question one, so the questions are
@@ -281,21 +371,27 @@ async function fetchEntry(
   sig: string,
   seq: number,
   epoch: number,
+  signal: AbortSignal,
 ): Promise<CacheEntry> {
   const post = toSlopPost(tweet);
   const questions = buildQuestions(settings, post);
-  const res = await withSlot(() =>
-    callSystemOne({
-      provider: settings.provider,
-      apiKey: activeKey(settings),
-      model: resolveModel(settings),
-      state: buildState(tweet),
-      questions,
-    }),
-  );
+  const res = await callSystemOne({
+    provider: settings.provider,
+    apiKey: activeKey(settings),
+    model: resolveModel(settings),
+    state: buildState(tweet),
+    questions,
+    signal,
+  });
 
   const read = readScores(res.answers);
-  const entry: CacheEntry = { scores: read.scores, quality: read.quality, sig, at: Date.now() };
+  const entry: CacheEntry = {
+    scores: read.scores,
+    quality: read.quality,
+    sig,
+    at: Date.now(),
+    cost: costOf(res.usage?.input_tokens ?? 0),
+  };
 
   if (settings.signals.slop.enabled) {
     const weights = resolveWeights(settings.slopWeights);
@@ -334,21 +430,36 @@ async function classifyTweet(tweet: TweetInput, settings: Settings, sig: string)
     return { id: tweet.id, scores: {}, filtered: false };
   }
 
+  // Same tweet and question set share one request. A second enqueue only
+  // moves a still-queued post forward. A different question set is a new call.
   const flightKey = `${tweet.id}\0${sig}`;
-  let pending = inFlight.get(flightKey);
-  if (!pending) {
+  let pendingFlight = inFlight.get(flightKey);
+  if (!pendingFlight) {
     const seq = ++nextSeq;
     const epoch = cacheEpoch;
-    const promise = fetchEntry(tweet, settings, sig, seq, epoch).finally(() => {
-      if (inFlight.get(flightKey) === promise) inFlight.delete(flightKey);
+    // The epoch is part of the queue id so a cache clear cannot join a request
+    // that was already in flight under the previous cache.
+    const promise = queue
+      .enqueue({
+        id: `${flightKey}\0${epoch}`,
+        priority: tweet.priority ?? 0,
+        run: (signal) => fetchEntry(tweet, settings, sig, seq, epoch, signal),
+      })
+      .then((outcome) => {
+        if (!outcome.ok) throw new Error(outcome.error);
+        return outcome.value;
+      });
+    const tracked = promise.finally(() => {
+      if (inFlight.get(flightKey) === tracked) inFlight.delete(flightKey);
     });
-    inFlight.set(flightKey, promise);
-    pending = promise;
+    inFlight.set(flightKey, tracked);
+    pendingFlight = tracked;
   }
 
   try {
-    const entry = await pending;
-    return { ...decide(tweet.id, entry, settings) };
+    const entry = await pendingFlight;
+    const verdict = decide(tweet.id, entry, settings);
+    return entry.cost === undefined ? verdict : { ...verdict, cost: entry.cost };
   } catch (err) {
     return {
       id: tweet.id,

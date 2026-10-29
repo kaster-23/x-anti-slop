@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { browser } from '#imports';
 import { loadSettings, saveSettings } from '@/lib/settings';
-import { PROVIDERS } from '@/lib/provider';
+import { PROVIDERS, formatCost } from '@/lib/provider';
+import { parseHandleList } from '@/lib/prefilter';
 import CustomFilters from './CustomFilters';
 import RepeatAccounts from './RepeatAccounts';
 import SlopTuning from './SlopTuning';
@@ -22,11 +23,13 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const [allowlistText, setAllowlistText] = useState('');
+  const [blocklistText, setBlocklistText] = useState('');
 
   useEffect(() => {
     loadSettings().then((s) => {
       setSettings(s);
       setAllowlistText(s.allowlist.join('\n'));
+      setBlocklistText((s.blocklist ?? []).join('\n'));
     });
     refreshStats();
   }, []);
@@ -191,8 +194,8 @@ export default function App() {
             <span>Hide posts until they have been checked</span>
           </label>
           <div className="sub">
-            Stops filtered posts flashing into view while the model is deciding. Posts reappear
-            automatically if a check takes more than six seconds.
+            Stops a post flashing into view before it has been judged. Posts reappear on their own
+            if a check is still running after eight seconds.
           </div>
         </div>
       </section>
@@ -210,16 +213,29 @@ export default function App() {
             placeholder="@friend&#10;@favouriteaccount"
             value={allowlistText}
             onChange={(e) => setAllowlistText(e.target.value)}
-            onBlur={() =>
-              update({
-                allowlist: allowlistText
-                  .split(/[\s,]+/)
-                  .map((h) => h.trim())
-                  .filter(Boolean),
-              })
-            }
+            onBlur={() => update({ allowlist: parseHandleList(allowlistText) })}
           />
           <div className="sub">One handle per line. These accounts skip every filter.</div>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>Always hide</h2>
+        <div className="field">
+          <textarea
+            spellCheck={false}
+            placeholder="@spammer"
+            value={blocklistText}
+            onChange={(e) => setBlocklistText(e.target.value)}
+            onBlur={() => update({ blocklist: parseHandleList(blocklistText) })}
+          />
+          <div className="sub">
+            One handle per line. These accounts are hidden, and the post is not sent to the model.
+          </div>
+        </div>
+        <div className="sub">
+          Posts under five words stay visible without a model call. Hashtag piles, emoji piles,
+          link dumps, and all-caps shouting are hidden on this device.
         </div>
       </section>
 
@@ -233,10 +249,14 @@ export default function App() {
             </div>
             <div className="stat">
               <b>{stats.filtered.toLocaleString()}</b>
-              <span>filtered out</span>
+              <span>hidden</span>
             </div>
             <div className="stat">
-              <b>${stats.cost.toFixed(4)}</b>
+              <b>{(stats.settledLocally ?? 0).toLocaleString()}</b>
+              <span>settled locally</span>
+            </div>
+            <div className="stat">
+              <b>{formatCost(stats.cost)}</b>
               <span>{stats.inputTokens.toLocaleString()} tokens</span>
             </div>
           </div>

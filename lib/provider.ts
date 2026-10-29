@@ -41,8 +41,8 @@ export const PROVIDERS: Record<
   },
 };
 
-const MAX_RETRY_DELAY_MS = 30_000;
-const REQUEST_TIMEOUT_MS = 30_000;
+/** Per attempt. A hung call must not stall the timeline. */
+export const REQUEST_TIMEOUT_MS = 2_000;
 
 /**
  * Every request gets a timeout: the wait holds a concurrency slot, so a hung
@@ -336,6 +336,13 @@ export function costOf(inputTokens: number): number {
   return inputTokens * USD_PER_INPUT_TOKEN;
 }
 
+/** Small session totals need more digits than a lifetime total does. */
+export function formatCost(usd: number): string {
+  if (!Number.isFinite(usd) || usd <= 0) return '$0.0000';
+  if (usd < 0.001) return `$${usd.toFixed(6)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
 /** Floating names. Sending one would let a later release move the thresholds. */
 const FLOATING_MODELS = new Set([
   'jev-latest',
@@ -408,8 +415,8 @@ export function systemOneBody(
 
 /**
  * Delay before another attempt, or null when the call should fail open.
- * 429 and 529 wait for `retry-after` when it is present and short enough to
- * hold a concurrency slot. A longer `retry-after` is not retried early.
+ * 429 and 529 use `retry-after` when the server sends one (delta-seconds or
+ * HTTP-date). Otherwise they, and other 5xx, use exponential backoff.
  * 422 is a bug in the request and is never retried.
  */
 export function parseRetryAfter(header: string | null, now = Date.now()): number | null {
@@ -421,6 +428,29 @@ export function parseRetryAfter(header: string | null, now = Date.now()): number
   return null;
 }
 
+/** Resolves after `ms`, or rejects if `signal` aborts. A 0ms wait still resolves. */
+export function waitForRetry(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(finish, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+    function finish() {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function abortError(): Error {
+  const err = new Error('The operation was aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
 export function nextRetryDelay(
   status: number,
   retryAfterHeader: string | null,
@@ -430,10 +460,7 @@ export function nextRetryDelay(
   if (attempt >= 3) return null;
   if (status !== 429 && status !== 529 && status < 500) return null;
   const headerMs = parseRetryAfter(retryAfterHeader, now);
-  if ((status === 429 || status === 529) && headerMs !== null) {
-    if (headerMs > MAX_RETRY_DELAY_MS) return null;
-    return headerMs;
-  }
+  if ((status === 429 || status === 529) && headerMs !== null) return headerMs;
   return 400 * 2 ** attempt;
 }
 
@@ -464,7 +491,8 @@ export async function callSystemOne(
   } catch (err) {
     if (opts.signal?.aborted) throw err;
     if ((err as Error).name === 'TimeoutError') {
-      throw new ProviderError(`No response after ${REQUEST_TIMEOUT_MS / 1000}s`, 0, true);
+      // Not retried: another two seconds would miss the scroll that asked.
+      throw new ProviderError(`No response after ${REQUEST_TIMEOUT_MS / 1000}s`, 0, false);
     }
     throw new ProviderError(redactSecrets(`Network error: ${(err as Error).message}`), 0, true);
   }
@@ -488,7 +516,9 @@ export async function callSystemOne(
     const wait = headerMs !== null && (res.status === 429 || res.status === 529)
       ? delay
       : delay + Math.random() * 200;
-    await new Promise((r) => setTimeout(r, wait));
+    // The queue aborts this call when the slot budget runs out. A long
+    // retry-after must not keep requesting after that fail-open.
+    await waitForRetry(wait, opts.signal);
     return callSystemOne(opts, attempt + 1);
   }
 

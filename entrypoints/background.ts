@@ -1,6 +1,14 @@
 import { defineBackground, browser } from '#imports';
-import { classify, clearCache, errorStore, readError, resetStats } from '@/lib/classifier';
-import { loadSettings, settingsStore, statsStore, EMPTY_STATS } from '@/lib/settings';
+import {
+  classify,
+  clearCache,
+  coerceStats,
+  errorStore,
+  readError,
+  rememberLocalDecisions,
+  resetStats,
+} from '@/lib/classifier';
+import { loadSettings, settingsStore, statsStore } from '@/lib/settings';
 import { clearLabels, labelMarks, saveLabel } from '@/lib/labels';
 import { testCredentials, testFilter } from '@/lib/provider';
 import { activeKey, blankKeys } from '@/lib/defaults';
@@ -47,6 +55,11 @@ async function handle(message: Message) {
       const settings = await loadSettings();
       return { verdicts: await classify(message.tweets, settings) };
     }
+    case 'recordLocal': {
+      const settings = await loadSettings();
+      await rememberLocalDecisions(message.decisions ?? [], settings);
+      return { ok: true };
+    }
     case 'getSettings':
       return { settings: blankKeys(await loadSettings()) };
     case 'getPublicSettings': {
@@ -54,7 +67,7 @@ async function handle(message: Message) {
       return { settings: blankKeys(settings), hasKey: activeKey(settings).length > 0 };
     }
     case 'getStats':
-      return { stats: (await statsStore.getValue()) ?? EMPTY_STATS };
+      return { stats: coerceStats(await statsStore.getValue()) };
     // Distinct key: `error` is also how a rejected handler reports itself, and
      // the popup would render that string as if it were the stored object.
     case 'getError':

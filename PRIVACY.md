@@ -24,7 +24,9 @@ worker sends one text string for that post to your selected provider. The
 string is the post text. When the post quotes another post, the quoted text is
 appended and the whole string is trimmed if the thread or quote chain is very
 long. The request does not include the author's handle, display name, or a
-description of attached media.
+description of attached media. Posts settled on the device — an account you
+allow or block, a post under five words, a promoted or media rule, or an
+obvious on-device count — are not sent.
 
 When the post is a reply and the post it answers is on the page, that text is
 appended under "In reply to:". It is still one string. The author's handle and
@@ -70,8 +72,9 @@ accessible to the developer.
 - **A cache of past results** — post identifiers, scores, and the style
   features that produced them, capped at 5,000 entries. The same post is not
   sent again until the questions, weights, or a threshold change
-- **Counters** — how many posts have been checked and filtered, and the
-  resulting token spend
+- **Counters** — how many posts have been checked, how many were settled without
+  a model call, how many were hidden, and the resulting token spend
+- **The handles you choose to always show or always hide**
 - **Flagged accounts** — the handle, display name, how many of that account's
   slop or ad posts were hidden, and whether you chose to auto-hide them. At most 200
   accounts are kept, along with the 50 most recent hidden post ids for each,

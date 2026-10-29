@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { browser } from '#imports';
 import { saveSettings } from '@/lib/settings';
 import { blankKeys, isUsable, THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
-import { PROVIDERS, QUALITY_LEVELS } from '@/lib/provider';
+import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import type { MediaFilterId, Settings, SignalId, Stats } from '@/lib/types';
 
 const SIGNALS: Array<{ id: SignalId; label: string; hint: string }> = [
@@ -263,10 +263,12 @@ export default function App() {
             <h2>Usage</h2>
             <div className="row">
               <span className="grow sub">
-                {stats.filtered.toLocaleString()} filtered of {stats.checked.toLocaleString()}{' '}
-                checked
+                {stats.checked.toLocaleString()} checked
+                <br />
+                {stats.filtered.toLocaleString()} hidden · {(stats.settledLocally ?? 0).toLocaleString()}{' '}
+                settled locally
               </span>
-              <span className="sub cost">${stats.cost.toFixed(4)}</span>
+              <span className="sub cost">{formatCost(stats.cost)}</span>
             </div>
           </div>
         )}
