@@ -1,6 +1,7 @@
 import { defineBackground, browser } from '#imports';
 import { classify, clearCache, errorStore, readError, resetStats } from '@/lib/classifier';
 import { loadSettings, settingsStore, statsStore, EMPTY_STATS } from '@/lib/settings';
+import { clearLabels, labelMarks, saveLabel } from '@/lib/labels';
 import { testCredentials, testFilter } from '@/lib/provider';
 import { activeKey, blankKeys } from '@/lib/defaults';
 import { redactSecrets } from '@/lib/redact';
@@ -14,9 +15,9 @@ export default defineBackground(() => {
     return true; // keeps the message channel open for the async response
   });
 
-  // Cached verdicts survive settings changes: entries record the question set
-  // that produced them and thresholds are applied at read time, so moving a
-  // threshold costs nothing and enabling a signal re-checks only what it must.
+  // Cached verdicts record the question set, the slop weights, and the
+  // thresholds that produced them. Moving a weight or a threshold misses, so
+  // the post is re-checked. Enabling a signal re-checks only what it must.
   //
   // Debounced because settings are saved per keystroke and per slider tick, and
   // each broadcast makes every open timeline drop its decisions and rescan. A
@@ -82,6 +83,21 @@ async function handle(message: Message) {
       if (!key) return { ok: false, error: 'Add an API key first.' };
       return await testFilter(settings, key, message.filter, message.text);
     }
+    case 'labelPost':
+      await saveLabel({
+        id: message.id,
+        label: message.label,
+        features: message.features,
+        text: message.text,
+        author: message.author,
+        at: Date.now(),
+      });
+      return { ok: true };
+    case 'getLabels':
+      return { labels: await labelMarks() };
+    case 'clearLabels':
+      await clearLabels();
+      return { ok: true };
     default:
       return { error: 'Unknown message' };
   }

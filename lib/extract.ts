@@ -125,6 +125,45 @@ function isReply(article: HTMLElement): boolean {
   return visibleText(context).startsWith('Replying to');
 }
 
+/**
+ * The post this reply answers, when that post is on the page.
+ * A self-thread is not a reply to someone else, so it contributes no parent.
+ * The previous cell is used only when its handle is the one X says this post
+ * is replying to. Otherwise, on a status page, the opened post is the parent.
+ */
+function readParentText(article: HTMLElement, author: string): string | undefined {
+  if (!isReply(article)) return undefined;
+
+  const mention = visibleText(article.querySelector<HTMLElement>('[data-testid="socialContext"]')).match(
+    /Replying to\s+(@[A-Za-z0-9_]+)/i,
+  );
+  const cell = article.closest('[data-testid="cellInnerDiv"]');
+  const prev = cell?.previousElementSibling?.querySelector<HTMLElement>(TWEET_SELECTOR);
+  if (prev && mention) {
+    const prevAuthor = readAuthor(prev).author;
+    const samePerson = author && prevAuthor && prevAuthor.toLowerCase() === author.toLowerCase();
+    if (!samePerson && prevAuthor.toLowerCase() === mention[1]?.toLowerCase()) {
+      const text = readText(prev).text;
+      if (text) return text;
+    }
+  }
+  return focalParentText(article);
+}
+
+function focalParentText(article: HTMLElement): string | undefined {
+  const statusId = (globalThis.location?.pathname ?? '').match(/\/status\/(\d+)/)?.[1];
+  if (!statusId || readTweetId(article) === statusId) return undefined;
+  const root = globalThis.document;
+  if (!root) return undefined;
+  for (const candidate of root.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
+    if (candidate === article) continue;
+    if (readTweetId(candidate) !== statusId) continue;
+    const text = readText(candidate).text;
+    return text || undefined;
+  }
+  return undefined;
+}
+
 export interface Extracted extends TweetInput {
   media: Media;
   promoted: boolean;
@@ -159,6 +198,7 @@ export function extractTweet(article: HTMLElement): Extracted | null {
     hasVideo: media.hasVideo || media.hasGif,
     isReply: isReply(article),
     isQuote: !!quotedText,
+    parentText: readParentText(article, author),
     media,
     promoted: isPromoted(article),
   };

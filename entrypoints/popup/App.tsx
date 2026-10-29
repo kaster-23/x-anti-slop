@@ -6,7 +6,7 @@ import { PROVIDERS, QUALITY_LEVELS } from '@/lib/provider';
 import type { MediaFilterId, Settings, SignalId, Stats } from '@/lib/types';
 
 const SIGNALS: Array<{ id: SignalId; label: string; hint: string }> = [
-  { id: 'slop', label: 'AI slop', hint: 'Thread-bait, platitudes, machine-written filler' },
+  { id: 'slop', label: 'AI slop', hint: 'Writing-style score from Jev, local counts, and your labels' },
   { id: 'ragebait', label: 'Rage bait', hint: 'Engineered outrage and dunks' },
   { id: 'ads', label: 'Ads & shilling', hint: 'Sales pitches, affiliate and crypto spam' },
 ];
