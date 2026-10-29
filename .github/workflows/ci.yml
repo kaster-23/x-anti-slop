@@ -53,7 +53,7 @@ jobs:
             const firefox = require('./.output/firefox-mv2/manifest.json');
             if (chrome.manifest_version !== 3) throw new Error('Chrome build is not MV3');
             if (firefox.manifest_version !== 2) throw new Error('Firefox build is not MV2');
-            if (chrome.name !== 'x-anti-slop' || firefox.name !== 'x-anti-slop') {
+            if (chrome.name !== 'X-AntiSlop' || firefox.name !== 'X-AntiSlop') {
               throw new Error('manifest name was not rebranded');
             }
             const hosts = chrome.host_permissions ?? [];

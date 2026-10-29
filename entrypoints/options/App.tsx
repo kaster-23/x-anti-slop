@@ -81,7 +81,7 @@ export default function App() {
   return (
     <main>
       <header>
-        <h1>x-anti-slop</h1>
+        <h1>X-AntiSlop</h1>
         <p>Hides AI-generated slop posts on X while you scroll, using TypeSafe's Jev.</p>
       </header>
 

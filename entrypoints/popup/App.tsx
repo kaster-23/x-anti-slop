@@ -65,7 +65,7 @@ export default function App() {
   return (
     <>
       <div className="card head">
-        <h1 className="grow">x-anti-slop</h1>
+        <h1 className="grow">X-AntiSlop</h1>
         <label className="switch" title={settings.enabled ? 'Turn off' : 'Turn on'}>
           <input
             type="checkbox"

@@ -477,7 +477,7 @@ export async function callSystemOne(
   // OpenRouter attributes traffic to an app via these; both are optional.
   if (opts.provider === 'openrouter') {
     headers['HTTP-Referer'] = 'https://github.com/kaster-23/x-anti-slop';
-    headers['X-Title'] = 'x-anti-slop';
+    headers['X-Title'] = 'X-AntiSlop';
   }
 
   let res: Response;

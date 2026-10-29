@@ -21,12 +21,12 @@ export function mountMeter(doc: Document): Meter {
   const root = doc.createElement('div');
   root.className = 'ct-meter';
   root.setAttribute('role', 'status');
-  root.setAttribute('aria-label', 'x-anti-slop counts for this timeline');
+  root.setAttribute('aria-label', 'X-AntiSlop counts for this timeline');
 
   const toggle = doc.createElement('button');
   toggle.type = 'button';
   toggle.className = 'ct-meter-toggle';
-  toggle.textContent = 'x-anti-slop';
+  toggle.textContent = 'X-AntiSlop';
   toggle.title = 'Counts for this timeline. Estimated cost uses the published Jev input rate.';
 
   const body = doc.createElement('div');
@@ -52,7 +52,7 @@ export function mountMeter(doc: Document): Meter {
     collapsed = !collapsed;
     root.classList.toggle('is-collapsed', collapsed);
     body.hidden = collapsed;
-    toggle.textContent = collapsed ? `${latest.hidden.toLocaleString()} hidden` : 'x-anti-slop';
+    toggle.textContent = collapsed ? `${latest.hidden.toLocaleString()} hidden` : 'X-AntiSlop';
   });
 
   return {
