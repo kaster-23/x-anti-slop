@@ -1,3 +1,5 @@
+import type { CategorySetting, SlopCategory, SlopWeights } from './detect/score';
+
 export type ProviderId = 'typesafe' | 'openrouter';
 
 /** Filters that require a model call. */
@@ -37,6 +39,25 @@ export interface Settings {
 
   signals: Record<SignalId, { enabled: boolean; threshold: number }>;
 
+  /**
+   * Per writing-style bucket. A bucket hides the post when its strongest tell
+   * clears this bar, even if the combined slop score does not.
+   */
+  slopCategories: Record<SlopCategory, CategorySetting>;
+
+  /**
+   * Combined-score threshold for a bot-style reply inside a thread.
+   * Lower than the AI-slop signal threshold. Each bucket's bar drops by the
+   * same gap while that reply is being judged.
+   */
+  replyBotThreshold: number;
+
+  /** Null uses the hand-set starting weights. A fit from labels replaces them. */
+  slopWeights: SlopWeights | null;
+
+  /** Show AI / Human marks on posts, and store them locally. */
+  labeling: boolean;
+
   /** Drop anything rated below this on the 0-3 quality scale. 0 disables. */
   minQuality: number;
 
@@ -69,6 +90,8 @@ export interface TweetInput {
    * is already on screen.
    */
   priority?: number;
+  /** Text of the post this one answers, when that post is on the page. */
+  parentText?: string;
 }
 
 export interface Verdict {
@@ -77,6 +100,14 @@ export interface Verdict {
   scores: Record<string, number>;
   /** 0-3, higher is better. */
   quality?: number;
+  /** Style-question and local-count features, present when the slop scorer ran. */
+  features?: Record<string, number>;
+  /** Strongest tell in each writing-style bucket, 0-1. */
+  categoryScores?: Partial<Record<SlopCategory, number>>;
+  /** A confident human tell vetoed the slop score. */
+  humanVeto?: boolean;
+  /** Bot-style reply inside a thread: the lower threshold applies. */
+  botReply?: boolean;
   filtered: boolean;
   /** Shown to the user, e.g. "AI slop (92%)". */
   reason?: string;
@@ -102,7 +133,17 @@ export type Message =
   | { type: 'getError' }
   | { type: 'dismissError' }
   | { type: 'testKey'; provider: ProviderId; apiKey: string; model: string }
-  | { type: 'testFilter'; filter: CustomFilter; text: string };
+  | { type: 'testFilter'; filter: CustomFilter; text: string }
+  | {
+      type: 'labelPost';
+      id: string;
+      label: 0 | 1;
+      features: Record<string, number>;
+      text: string;
+      author: string;
+    }
+  | { type: 'getLabels' }
+  | { type: 'clearLabels' };
 
 export interface Stats {
   checked: number;

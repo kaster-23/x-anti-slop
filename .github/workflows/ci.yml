@@ -35,6 +35,9 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      - name: Eval against recorded Jev answers
+        run: pnpm eval
+
       - name: Build Chrome
         run: pnpm build
 

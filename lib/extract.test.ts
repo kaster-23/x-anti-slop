@@ -121,6 +121,29 @@ describe('extractTweet', () => {
     expect(extractTweet(render(tweetHtml({ replyingTo: '@someone' })))!.isReply).toBe(true);
     expect(extractTweet(render(tweetHtml({})))!.isReply).toBe(false);
   });
+
+  test('reads the parent post when the previous cell is the account being replied to', () => {
+    doc.body.innerHTML = `
+      <div>
+        ${tweetHtml({ id: '1', handle: '@sam', name: 'Sam', text: 'the claim itself' })}
+        ${tweetHtml({ id: '2', handle: '@ada', name: 'Ada', text: 'not that', replyingTo: '@sam' })}
+      </div>`;
+    const articles = [...doc.querySelectorAll('article')];
+    const reply = extractTweet(articles[1] as unknown as HTMLElement)!;
+    expect(reply.isReply).toBe(true);
+    expect(reply.parentText).toBe('the claim itself');
+  });
+
+  test('does not treat a self-thread as a reply to someone else', () => {
+    doc.body.innerHTML = `
+      <div>
+        ${tweetHtml({ id: '1', text: 'my first post' })}
+        ${tweetHtml({ id: '2', text: 'and another', replyingTo: '@janedev' })}
+      </div>`;
+    const articles = [...doc.querySelectorAll('article')];
+    const reply = extractTweet(articles[1] as unknown as HTMLElement)!;
+    expect(reply.parentText).toBeUndefined();
+  });
 });
 
 describe('readMedia', () => {

@@ -1,6 +1,10 @@
 import { isUsable } from './defaults';
+import { buildStyleQuestions, type SlopPost } from './detect/questions';
 import { redactSecrets } from './redact';
 import type { CustomFilter, ProviderId, SignalId, Settings, TweetInput } from './types';
+
+/** Pinned TypeSafe id. `jev-latest` aliases this as of the Oct 2026 models docs. */
+export const JEV_MODEL = 'jev-1.14.0';
 
 /**
  * Jev is reachable two ways. Both take the identical `{model, state, questions}`
@@ -22,8 +26,7 @@ export const PROVIDERS: Record<
     label: 'TypeSafe (direct)',
     name: 'TypeSafe',
     url: 'https://api.typesafe.ai/v1/systemone',
-    // Versioned id. As of the Oct 2026 models docs, `jev-latest` aliases this.
-    defaultModel: 'jev-1.14.0',
+    defaultModel: JEV_MODEL,
     keysUrl: 'https://console.typesafe.ai/settings/keys',
     keyPrefix: 'apikey_',
   },
@@ -31,7 +34,7 @@ export const PROVIDERS: Record<
     label: 'OpenRouter',
     name: 'OpenRouter',
     url: 'https://openrouter.ai/api/alpha/decisions',
-    // OpenRouter's current model id. `~typesafe/jev-latest` is the floating alias.
+    // OpenRouter's id for the pinned jev-1.14.0. `~typesafe/jev-latest` floats.
     defaultModel: 'typesafe/jev-1.14',
     keysUrl: 'https://openrouter.ai/keys',
     keyPrefix: 'sk-or-',
@@ -56,40 +59,54 @@ function requestSignal(external?: AbortSignal): AbortSignal {
 /** $0.042 per million input tokens; output tokens are free. */
 const USD_PER_INPUT_TOKEN = 0.042 / 1_000_000;
 
+/**
+ * An 11th score level is a 422. A smoke test (29 Oct 2026) also showed a
+ * 30-question request has the same warm latency as a 3-question one
+ * (~80–125 ms) at about twice the tokens (~1,070 input tokens per post),
+ * so the style bank goes out as one request.
+ */
+export const MAX_SCORE_LEVELS = 10;
+
 type NoulQuestion = {
   type: 'noul';
   instructions: string;
   criteria?: { true: string; false: string };
 };
 type ScoreQuestion = { type: 'score'; instructions: string; criteria: string[] };
-type Question = NoulQuestion | ScoreQuestion;
-
-/** Jev rejects a score question whose criteria has an 11th level with a 422. */
-export const MAX_SCORE_LEVELS = 10;
+/**
+ * Unordered options. Documented at https://docs.typesafe.ai/primitives/choice.
+ * The style bank does not use it: those tells are yes/no (noul) or an ordered
+ * rhythm (score). Kept so a later question can send the type the docs describe.
+ */
+type ChoiceQuestion = {
+  type: 'choice';
+  instructions: string;
+  criteria: Record<string, string>;
+};
+type Question = NoulQuestion | ScoreQuestion | ChoiceQuestion;
 
 export function capScoreCriteria(levels: readonly string[]): string[] {
   return levels.slice(0, MAX_SCORE_LEVELS);
 }
 
-/** Question names the live model was scored under. Settings still say slop/ads. */
-const API_QUESTION: Record<SignalId, string> = {
-  slop: 'ai_slop',
-  ragebait: 'ragebait',
-  ads: 'ad',
+/**
+ * The single broad slop question this extension used before the style bank.
+ * The eval harness still asks it, so the new scorer can be compared with the
+ * clean-twitter baseline. The live classifier does not send it.
+ */
+export const BASELINE_SLOP_QUESTION: NoulQuestion = {
+  type: 'noul',
+  instructions:
+    "The post is low-effort AI-generated or engagement-farming 'slop': formulaic thread-bait, " +
+    'hollow motivational platitudes, listicles of truisms, engagement-baiting questions, ' +
+    'or text that reads as machine-written filler.',
+  criteria: {
+    true: 'Formulaic engagement bait or machine-written filler with no specific substance',
+    false: 'A genuine post with specific, concrete substance, however casual',
+  },
 };
 
-const SIGNAL_QUESTIONS: Record<SignalId, NoulQuestion> = {
-  slop: {
-    type: 'noul',
-    instructions:
-      "The post is low-effort AI-generated or engagement-farming 'slop': formulaic thread-bait, " +
-      'hollow motivational platitudes, listicles of truisms, engagement-baiting questions, ' +
-      'or text that reads as machine-written filler.',
-    criteria: {
-      true: 'Formulaic engagement bait or machine-written filler with no specific substance',
-      false: 'A genuine post with specific, concrete substance, however casual',
-    },
-  },
+const SIGNAL_QUESTIONS: Record<Exclude<SignalId, 'slop'>, NoulQuestion> = {
   ragebait: {
     type: 'noul',
     instructions:
@@ -147,19 +164,40 @@ export function activeCustomFilters(settings: Settings): CustomFilter[] {
   return (settings.customFilters ?? []).filter((f) => f.enabled && isUsable(f));
 }
 
-export function buildQuestions(settings: Settings): Record<string, Question> {
+export function toSlopPost(tweet: Pick<TweetInput, 'text' | 'parentText' | 'isReply'>): SlopPost {
+  return { text: tweet.text, parentText: tweet.parentText, isReply: tweet.isReply };
+}
+
+/**
+ * One post, one request. The slop signal is the full style bank (~30 questions),
+ * not one broad noul. Rage bait and ads stay single questions. Engagement-bait
+ * slop often comes back as `ad`, so the slop filter asks that too.
+ */
+export function buildQuestions(
+  settings: Settings,
+  post: SlopPost = { text: '' },
+): Record<string, Question> {
   const questions: Record<string, Question> = {};
-  for (const [id, cfg] of Object.entries(settings.signals)) {
-    if (!cfg.enabled) continue;
-    questions[API_QUESTION[id as SignalId]] = SIGNAL_QUESTIONS[id as SignalId];
-  }
-  // Engagement-bait slop often comes back as `ad`, so the slop filter asks both.
-  if (settings.signals.slop.enabled) questions.ad = SIGNAL_QUESTIONS.ads;
+  if (settings.signals.ragebait.enabled) questions.ragebait = SIGNAL_QUESTIONS.ragebait;
+  if (settings.signals.ads.enabled || settings.signals.slop.enabled) questions.ad = SIGNAL_QUESTIONS.ads;
+  if (settings.signals.slop.enabled) Object.assign(questions, buildStyleQuestions(post));
   if (settings.minQuality > 0) {
     questions.quality = { ...QUALITY_QUESTION, criteria: capScoreCriteria(QUALITY_QUESTION.criteria) };
   }
   for (const filter of activeCustomFilters(settings)) {
     questions[customKey(filter)] = toQuestion(filter);
+  }
+  return questions;
+}
+
+/** The pre-port question set: one noul each for slop, rage bait, and ads. */
+export function buildBaselineQuestions(settings: Settings): Record<string, Question> {
+  const questions: Record<string, Question> = {};
+  if (settings.signals.slop.enabled) questions.slop = BASELINE_SLOP_QUESTION;
+  if (settings.signals.ragebait.enabled) questions.ragebait = SIGNAL_QUESTIONS.ragebait;
+  if (settings.signals.ads.enabled) questions.ads = SIGNAL_QUESTIONS.ads;
+  if (settings.minQuality > 0) {
+    questions.quality = { ...QUALITY_QUESTION, criteria: capScoreCriteria(QUALITY_QUESTION.criteria) };
   }
   return questions;
 }
@@ -181,11 +219,15 @@ function clip(value: string, max: number): string {
 }
 
 /** The `state` field is the tweet text, not a structured record. */
-export function buildState(tweet: Pick<TweetInput, 'text' | 'quotedText'>): string {
-  const text = squash(tweet.text);
+export function buildState(
+  tweet: Pick<TweetInput, 'text' | 'quotedText' | 'parentText'>,
+): string {
+  const parts = [squash(tweet.text)];
+  const parent = squash(tweet.parentText ?? '');
   const quote = squash(tweet.quotedText ?? '');
-  if (!quote) return clip(text, MAX_STATE_CHARS);
-  return clip(`${text}\n\nQuoted:\n${quote}`, MAX_STATE_CHARS);
+  if (parent) parts.push(`In reply to:\n${parent}`);
+  if (quote) parts.push(`Quoted:\n${quote}`);
+  return clip(parts.filter(Boolean).join('\n\n'), MAX_STATE_CHARS);
 }
 
 const SCORE_LABEL: Record<SignalId, string> = {
@@ -250,6 +292,10 @@ export function readScores(answers: Record<string, Partial<Answer>> | undefined)
   return { scores, quality };
 }
 
+/**
+ * Probability that the answer is yes. A noul has no confidence field;
+ * score and choice answers are the ones that carry confidence.
+ */
 export interface NoulAnswer {
   type: 'noul';
   noul: number;
@@ -261,7 +307,13 @@ export interface ScoreAnswer {
   legend: Record<string, string>;
   probabilities: Record<string, number>;
 }
-export type Answer = NoulAnswer | ScoreAnswer;
+export interface ChoiceAnswer {
+  type: 'choice';
+  choice: string;
+  probabilities: Record<string, number>;
+  confidence: number;
+}
+export type Answer = NoulAnswer | ScoreAnswer | ChoiceAnswer;
 
 export interface SystemOneResponse {
   model: string;
@@ -315,6 +367,53 @@ interface CallOptions {
 }
 
 /**
+ * The body a smoke test measured: `{ model, state, questions }`, with each
+ * question limited to `{ type, instructions, criteria }`. State is the tweet
+ * text. Questions for several posts never share a body.
+ */
+export function systemOneBody(
+  model: string,
+  state: unknown,
+  questions: Record<string, Question>,
+): { model: string; state: unknown; questions: Record<string, { type: string; instructions: string; criteria?: unknown }> } {
+  const wire: Record<string, { type: string; instructions: string; criteria?: unknown }> = {};
+  for (const [name, question] of Object.entries(questions)) {
+    if (question.type === 'noul' && question.criteria) {
+      const keys = Object.keys(question.criteria).sort();
+      if (keys.join(',') !== 'false,true') {
+        throw new ProviderError(`Noul question "${name}" criteria must be {true, false}.`, 422, false);
+      }
+    }
+    if (question.type === 'score') {
+      if (!Array.isArray(question.criteria) || question.criteria.some((level) => typeof level !== 'string')) {
+        throw new ProviderError(`Score question "${name}" criteria must be an ordered array of descriptions.`, 422, false);
+      }
+      if (question.criteria.length > MAX_SCORE_LEVELS) {
+        throw new ProviderError(
+          `Score question "${name}" has ${question.criteria.length} levels; Jev accepts at most ${MAX_SCORE_LEVELS}.`,
+          422,
+          false,
+        );
+      }
+    }
+    if (question.type === 'choice') {
+      const criteria = question.criteria;
+      const values = criteria && !Array.isArray(criteria) ? Object.values(criteria) : [];
+      if (!criteria || Array.isArray(criteria) || values.length === 0 || values.some((value) => typeof value !== 'string')) {
+        throw new ProviderError(`Choice question "${name}" criteria must be {option: description}.`, 422, false);
+      }
+    }
+    const entry: { type: string; instructions: string; criteria?: unknown } = {
+      type: question.type,
+      instructions: question.instructions,
+    };
+    if (question.criteria) entry.criteria = question.criteria;
+    wire[name] = entry;
+  }
+  return { model, state, questions: wire };
+}
+
+/**
  * Delay before another attempt, or null when the call should fail open.
  * 429 and 529 use `retry-after` when the server sends one (delta-seconds or
  * HTTP-date). Otherwise they, and other 5xx, use exponential backoff.
@@ -363,11 +462,7 @@ export async function callSystemOne(
     res = await fetch(provider.url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: opts.model,
-        state: opts.state,
-        questions: opts.questions,
-      }),
+      body: JSON.stringify(systemOneBody(opts.model, opts.state, opts.questions)),
       signal: requestSignal(opts.signal),
     });
   } catch (err) {

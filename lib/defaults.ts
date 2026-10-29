@@ -1,6 +1,11 @@
 /** Free of extension-runtime imports, so build scripts and the eval harness
  *  can use these outside the browser. */
 import { djb2 } from './hash';
+import {
+  DEFAULT_REPLY_BOT_THRESHOLD,
+  defaultCategorySettings,
+  type SlopThresholds,
+} from './detect/score';
 import type { CustomFilter, Settings, Stats } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -16,6 +21,11 @@ export const DEFAULT_SETTINGS: Settings = {
     ragebait: { enabled: true, threshold: 0.7 },
     ads: { enabled: true, threshold: 0.6 },
   },
+
+  slopCategories: defaultCategorySettings(),
+  replyBotThreshold: DEFAULT_REPLY_BOT_THRESHOLD,
+  slopWeights: null,
+  labeling: true,
 
   minQuality: 0,
 
@@ -78,6 +88,15 @@ export const EMPTY_STATS: Stats = {
 
 export function activeKey(s: Settings): string {
   return s.provider === 'openrouter' ? s.openrouterApiKey : s.typesafeApiKey;
+}
+
+/** The bars the slop scorer reads. Signal thresholds for rage bait and ads stay outside. */
+export function slopThresholdsOf(settings: Settings): SlopThresholds {
+  return {
+    score: settings.signals.slop.threshold,
+    replyBot: settings.replyBotThreshold,
+    categories: settings.slopCategories,
+  };
 }
 
 /** Settings safe to hand to a content script or the popup. The key stays in storage. */

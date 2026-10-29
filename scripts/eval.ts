@@ -1,106 +1,140 @@
 /**
- * Runs the extension's real question set over labelled sample posts and reports
- * how the current defaults classify each one. Use it when changing question
- * wording or thresholds.
+ * Compares the style scorer with the clean-twitter baseline on a small
+ * labelled set.
  *
+ *   pnpm eval
  *   TYPESAFE_API_KEY=... pnpm eval
- *   PROVIDER=openrouter OPENROUTER_API_KEY=... pnpm eval
+ *
+ * With no TYPESAFE_API_KEY, the script uses recorded answers in
+ * scripts/fixtures and says so. It does not call the network in that mode.
+ * OpenRouter is optional: PROVIDER=openrouter OPENROUTER_API_KEY=... pnpm eval
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { baselineHides, baselineScoresFrom, styleDecision } from '../lib/detect/compare';
+import { DEFAULT_SETTINGS } from '../lib/defaults';
 import {
+  buildBaselineQuestions,
   buildQuestions,
   buildState,
   callSystemOne,
-  hidingMatch,
   PROVIDERS,
-  readScores,
   resolveModel,
+  toSlopPost,
 } from '../lib/provider';
-import { DEFAULT_SETTINGS } from '../lib/defaults';
-import type { ProviderId, Settings, TweetInput } from '../lib/types';
+import type { SystemOneResponse } from '../lib/provider';
+import type { Settings, TweetInput } from '../lib/types';
+import { LIVE_EVAL_COMMAND, evalModeFromEnv } from './eval-mode';
+import { SAMPLES, type Sample } from './samples';
 
-type Sample = { label: 'junk' | 'keep'; tweet: Partial<TweetInput> & { text: string } };
-
-const SAMPLES: Sample[] = [
-  { label: 'junk', tweet: { author: '@grindsetdaily', text: "Most people will never be rich.\n\nHere's why 🧵\n\n1/ They trade time for money.\n2/ They don't understand leverage.\n3/ They fear discomfort.\n\nRead that again." } },
-  { label: 'junk', tweet: { author: '@hustlequotes', text: 'Discipline > motivation.\n\nAgree?' } },
-  { label: 'junk', tweet: { author: '@newsrage', text: 'BREAKING: They are LITERALLY coming for your children. Every single one of these people needs to be held accountable NOW. RT IF YOU AGREE 🚨🚨🚨' } },
-  { label: 'junk', tweet: { author: '@takesguy', text: 'Imagine being this stupid. Absolute clown. The replies are going to be full of people defending this because they have no principles whatsoever.' } },
-  { label: 'junk', tweet: { author: '@shopdeals', text: 'I made $8,400 last month with this ONE simple dropshipping tool. Link in bio. Only 3 spots left at this price 👇 #ad' } },
-  { label: 'junk', tweet: { author: '@cryptomoon', text: '🚀 $PEPE2 is about to 100x. Early holders are going to make life changing money. Join the telegram before it is too late. NFA DYOR' } },
-  // A real promoted post. Scores only ~0.65 on `ads` because the actual pitch
-  // (a "$100,000 MT5 demo account" bonus) is in the image, which Jev can't read.
-  // It is caught in the wild by X's own "Ad" label, before any model call.
-  { label: 'junk', tweet: { author: '@IMTRADERfx01', text: "🇮🇳 Indian Forex Traders\nAnybody who's locked in trading?\nI've an Indian WhatsApp group with quality people. I invite all those who want to join and share their experience and valuable insights.\nWe don't tolerate anything other than trading. Requesting serious people to kindly DM." } },
-
-  { label: 'keep', tweet: { author: '@janedev', text: "spent the afternoon tracking down a memory leak in our websocket handler. turned out we were never removing the 'close' listener on reconnect. 40 lines of diff, 2GB of RSS saved." } },
-  { label: 'keep', tweet: { author: '@sam', text: 'the coffee at this airport is genuinely offensive and i have 4 hours to go' } },
-  { label: 'keep', tweet: { author: '@researcher', text: 'New paper: we show that speculative decoding gains collapse once batch size exceeds ~32, because the verification step saturates memory bandwidth. Code and benchmarks linked below.' } },
-  { label: 'keep', tweet: { author: '@historian', text: 'A thing people forget about the 1970s oil shocks: the queues at petrol stations were mostly a rationing artefact, not a supply one. The US price controls made shortages worse than the embargo did.' } },
-  { label: 'keep', tweet: { author: '@founder', text: "We're hiring two backend engineers in Berlin. Rust and Postgres, mostly. Remote within EU is fine. DMs open if you want to know what the work actually looks like." } },
-  { label: 'keep', tweet: { author: '@parent', text: 'my daughter just asked why the moon follows the car and I have been thinking about parallax for twenty minutes' } },
-];
-
-const provider = (process.env.PROVIDER ?? 'typesafe') as ProviderId;
-const apiKey =
-  provider === 'openrouter' ? process.env.OPENROUTER_API_KEY : process.env.TYPESAFE_API_KEY;
-
-if (!apiKey) {
-  console.error(`Set ${provider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'TYPESAFE_API_KEY'}.`);
-  process.exit(1);
+interface FixtureSample {
+  /** Recorded `{ model, answers, usage }` bodies. Noul answers are `{ type, noul }` only. */
+  baseline: SystemOneResponse;
+  style: SystemOneResponse;
 }
 
-const settings: Settings = { ...DEFAULT_SETTINGS, provider, minQuality: 1 };
-const questions = buildQuestions(settings);
+interface FixtureFile {
+  samples: FixtureSample[];
+}
+
+const mode = evalModeFromEnv();
+const provider = mode.live ? mode.provider : 'typesafe';
+const apiKey = mode.live ? mode.apiKey : '';
+
+const settings: Settings = { ...DEFAULT_SETTINGS, provider };
 const model = resolveModel(settings);
 
-console.log(`provider=${PROVIDERS[provider].label}  model=${model}\n`);
+function tweetOf(sample: Sample, index: number): TweetInput {
+  return {
+    id: String(index),
+    author: sample.tweet.author ?? '',
+    authorName: '',
+    text: sample.tweet.text,
+    hasImage: false,
+    hasVideo: false,
+    isReply: sample.tweet.isReply ?? false,
+    isQuote: false,
+    parentText: sample.tweet.parentText,
+  };
+}
 
-let tokens = 0;
-let correct = 0;
-const rows: string[] = [];
-
-await Promise.all(
-  SAMPLES.map(async (sample, i) => {
-    const tweet: TweetInput = {
-      id: String(i),
-      author: sample.tweet.author ?? '',
-      authorName: '',
-      text: sample.tweet.text,
-      hasImage: false,
-      hasVideo: false,
-      isReply: false,
-      isQuote: false,
-    };
-
-    const res = await callSystemOne({
+async function liveAnswers(sample: Sample, index: number): Promise<FixtureSample> {
+  const tweet = tweetOf(sample, index);
+  const post = toSlopPost(tweet);
+  // Two calls only because the harness compares two question sets. The extension
+  // sends the style bank once, in a single request, together with rage bait and ads.
+  const [baseline, style] = await Promise.all([
+    callSystemOne({
       provider,
-      apiKey: apiKey!,
+      apiKey,
       model,
       state: buildState(tweet),
-      questions,
-    });
-    tokens += res.usage?.input_tokens ?? 0;
+      questions: buildBaselineQuestions(settings),
+    }),
+    callSystemOne({
+      provider,
+      apiKey,
+      model,
+      state: buildState(tweet),
+      questions: buildQuestions(settings, post),
+    }),
+  ]);
+  return { baseline, style };
+}
 
-    const { scores, quality = 0 } = readScores(res.answers);
-    const match = hidingMatch(scores, settings);
-    const filtered = match !== null;
-    const ok = filtered === (sample.label === 'junk');
-    if (ok) correct++;
+function recordedAnswers(): FixtureSample[] {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const file = join(here, 'fixtures', 'jev-responses.json');
+  const parsed = JSON.parse(readFileSync(file, 'utf8')) as FixtureFile;
+  if (parsed.samples.length !== SAMPLES.length) {
+    throw new Error(`Fixture has ${parsed.samples.length} rows, samples has ${SAMPLES.length}.`);
+  }
+  return parsed.samples;
+}
 
-    rows[i] =
-      `${ok ? ' ok ' : 'MISS'}  ${sample.label.padEnd(4)}  ` +
-      `slop=${fmt(scores.slop)} rage=${fmt(scores.ragebait)} ad=${fmt(scores.ads)} ` +
-      `q=${quality.toFixed(1)}  ${filtered ? `HIDE[${match?.label}]` : 'keep'}  ` +
-      `${sample.tweet.text.replace(/\s+/g, ' ').slice(0, 44)}…`;
-  }),
-);
+const live = mode.live;
+if (live) {
+  console.log(`source: live ${PROVIDERS[provider].label}  model=${model}  (key from the environment)`);
+  console.log('One post per request. Baseline and style are separate calls so the question sets do not mix.\n');
+} else {
+  console.log('source: recorded fixtures (TYPESAFE_API_KEY is not set)');
+  console.log('scripts/fixtures/jev-responses.json — not live Jev output.');
+  console.log(`Live, on a machine that has a key: ${LIVE_EVAL_COMMAND}\n`);
+}
 
-console.log(rows.join('\n'));
+const rows = live ? await Promise.all(SAMPLES.map(liveAnswers)) : recordedAnswers();
+
+let baselineCorrect = 0;
+let styleCorrect = 0;
+const lines: string[] = [];
+
+rows.forEach((row, i) => {
+  const sample = SAMPLES[i]!;
+  const post = toSlopPost(tweetOf(sample, i));
+  const baselineScores = baselineScoresFrom(row.baseline.answers);
+  const baseHide = baselineHides(baselineScores, settings);
+  const style = styleDecision(row.style.answers, post, baselineScores, settings);
+  const wantHide = sample.label === 'junk';
+  const baseOk = baseHide === wantHide;
+  const styleOk = style.hides === wantHide;
+  if (baseOk) baselineCorrect++;
+  if (styleOk) styleCorrect++;
+  const mark = `${baseOk ? 'ok' : 'MISS'}/${styleOk ? 'ok' : 'MISS'}`;
+  lines.push(
+    `${mark.padEnd(9)} ${sample.label.padEnd(4)}  ` +
+      `base=${baseHide ? 'HIDE' : 'keep'}  style=${style.hides ? 'HIDE' : 'keep'}` +
+      `${style.botReply ? ' bot' : '    '}  ` +
+      `slop ${baselineScores.slop.toFixed(2)} → ${style.slop.toFixed(2)}  ` +
+      `${sample.tweet.text.replace(/\s+/g, ' ').slice(0, 42)}…`,
+  );
+});
+
+console.log('base/style  label  decisions');
+console.log(lines.join('\n'));
 console.log(
-  `\n${correct}/${SAMPLES.length} correct · ${tokens} input tokens · ` +
-    `$${(tokens * 0.042e-6).toFixed(6)}`,
+  `\nbaseline ${baselineCorrect}/${SAMPLES.length}   style scorer ${styleCorrect}/${SAMPLES.length}`,
 );
-
-function fmt(n: number | undefined) {
-  return n === undefined ? ' -- ' : n.toFixed(2);
+if (!live) {
+  console.log(`Recorded answers only. Live: ${LIVE_EVAL_COMMAND}`);
 }

@@ -1,0 +1,859 @@
+{
+  "note": "Recorded stand-ins in the Jev response shape {model, answers, usage}. Noul answers are {type, noul} with no confidence field. Not live model output. A 30-question call is about 1,070 input tokens.",
+  "samples": [
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.92
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.22
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.14
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.88
+          },
+          "engagement_close": {
+            "type": "noul",
+            "noul": 0.72
+          },
+          "manufactured_punchlines": {
+            "type": "noul",
+            "noul": 0.8
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 2.4,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.84
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.1
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.82
+          },
+          "engagement_close": {
+            "type": "noul",
+            "noul": 0.7
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 1.8,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.55
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.93
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.08
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.4
+          },
+          "stakes_inflation": {
+            "type": "noul",
+            "noul": 0.45
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 1.5,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.4
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.88
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.06
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.35
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 1.2,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.3
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.12
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.91
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.28
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 1.35,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.4
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.2
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.9
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.33
+          },
+          "stakes_inflation": {
+            "type": "noul",
+            "noul": 0.4
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 1.5,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.35
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.1
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.65
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.3
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 1.2,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.08
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.02
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.12
+          },
+          "firsthand_specifics": {
+            "type": "noul",
+            "noul": 0.7
+          },
+          "human_slips": {
+            "type": "noul",
+            "noul": 0.4
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 0.6,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.12
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.02
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.15
+          },
+          "humor": {
+            "type": "noul",
+            "noul": 0.45
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 0.45,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.1
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.03
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.14
+          },
+          "firsthand_specifics": {
+            "type": "noul",
+            "noul": 0.6
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 0.75,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.18
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.06
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.03
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.2
+          },
+          "firsthand_specifics": {
+            "type": "noul",
+            "noul": 0.55
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 0.9,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.2
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.04
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.31
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.16
+          },
+          "firsthand_specifics": {
+            "type": "noul",
+            "noul": 0.5
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 0.75,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.05
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.02
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.02
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.08
+          },
+          "humor": {
+            "type": "noul",
+            "noul": 0.5
+          },
+          "firsthand_specifics": {
+            "type": "noul",
+            "noul": 0.65
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 0.3,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.48
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.1
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.05
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "contrast_pivot": {
+            "type": "noul",
+            "noul": 0.59
+          },
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.59
+          },
+          "compressed_coinage": {
+            "type": "noul",
+            "noul": 0.59
+          },
+          "paint_words": {
+            "type": "noul",
+            "noul": 0.5
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    },
+    {
+      "baseline": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "slop": {
+            "type": "noul",
+            "noul": 0.82
+          },
+          "ragebait": {
+            "type": "noul",
+            "noul": 0.15
+          },
+          "ads": {
+            "type": "noul",
+            "noul": 0.04
+          }
+        },
+        "usage": {
+          "input_tokens": 480,
+          "output_tokens": 0
+        }
+      },
+      "style": {
+        "model": "jev-1.14.0",
+        "answers": {
+          "reads_as_model": {
+            "type": "noul",
+            "noul": 0.34
+          },
+          "contrast_pivot": {
+            "type": "noul",
+            "noul": 0.4
+          },
+          "emphatic_repetition": {
+            "type": "noul",
+            "noul": 0.9
+          },
+          "humor": {
+            "type": "noul",
+            "noul": 0.3
+          },
+          "uniform_cadence": {
+            "type": "score",
+            "score": 0.6,
+            "confidence": 0.7,
+            "legend": {
+              "0": "Uneven",
+              "1": "Mostly natural",
+              "2": "Even",
+              "3": "Scripted"
+            },
+            "probabilities": {
+              "0": 0.1,
+              "1": 0.2,
+              "2": 0.3,
+              "3": 0.4
+            }
+          }
+        },
+        "usage": {
+          "input_tokens": 1070,
+          "output_tokens": 0
+        }
+      }
+    }
+  ]
+}

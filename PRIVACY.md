@@ -28,6 +28,10 @@ description of attached media. Posts settled on the device — an account you
 allow or block, a post under five words, a promoted or media rule, or an
 obvious on-device count — are not sent.
 
+When the post is a reply and the post it answers is on the page, that text is
+appended under "In reply to:". It is still one string. The author's handle and
+display name are not fields in the request.
+
 Alongside that text it sends the filter questions and your API key, used as a
 bearer token so the provider can authenticate and bill you. Only the background
 worker makes this call.
@@ -40,8 +44,9 @@ Nothing else is transmitted. In particular the extension does **not** send:
 - **Your identity.** No account, no email address, no login, no device or
   browser identifier, and no X/Twitter session data or cookies.
 - **Your browsing history**, or any page other than posts on an X timeline.
-- **Posts it has already judged.** Results are cached, so a given post is sent
-  at most once.
+- **Posts it has already judged.** Results are cached by post id. A post is
+  sent again only when the questions, the fitted weights, or a threshold
+  change, because those are part of the cache key.
 
 ## Where it is sent
 
@@ -64,12 +69,15 @@ anywhere except the post fields and API key described above, and none of it is
 accessible to the developer.
 
 - **Your settings**, including your API key and any filters you have written
-- **A cache of past results** — post identifiers and the resulting scores,
-  capped at 5,000 entries, so the same post is never sent twice
+- **A cache of past results** — post identifiers, scores, and the style
+  features that produced them, capped at 5,000 entries. The same post is not
+  sent again until the questions, weights, or a threshold change
 - **Counters** — how many posts have been checked, how many were settled without
   a model call, how many were hidden, and the resulting token spend
 - **The handles you choose to always show or always hide**
 - **The most recent API error**, so a failure can be shown in the popup
+- **Marks you set** (AI or Human), with the post text and the feature scores
+  used to fit weights. Those stay on this device. Fitting runs locally.
 
 Your API key is stored locally, is never logged, and is sent only to the
 provider you selected, and only by the background worker. Uninstalling the
