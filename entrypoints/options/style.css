@@ -1,81 +1,108 @@
 @import "../../assets/ui.css";
 
 body {
-  padding: 32px 20px 64px;
+  padding: 36px 20px 72px;
 }
 
-main {
-  max-width: 560px;
+.page {
+  max-width: 760px;
   margin: 0 auto;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--bg);
 }
 
-.card:first-child {
-  border-top: none;
+.mast {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
-header {
-  padding: 18px 20px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-}
-
-header p {
-  margin: 5px 0 0;
+.lede {
+  max-width: 46ch;
+  margin-top: 6px;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
-.card {
-  padding: 18px 20px;
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 650;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
 }
 
-.field + .field {
-  margin-top: 18px;
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
 }
 
-/*
- * Lighter than the section heading above it, so the hierarchy reads downward.
- * Excludes `.check`, whose own `display: flex` this would otherwise override on
- * equal specificity — collapsing the gap between a checkbox and its text.
- */
-.field > label:not(.check) {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: 500;
+.status.is-on .status-dot {
+  background: var(--ok);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 18%, transparent);
 }
 
-.field > label.check {
-  margin-bottom: 6px;
-  font-weight: 500;
+.panel {
+  margin-top: 14px;
+  padding: 22px 22px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
 }
 
-.field .sub {
-  margin-top: 5px;
+.panel-head {
+  margin-bottom: 14px;
+}
+
+.panel-head .hint {
+  margin-top: 4px;
+}
+
+.group-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.field + .field,
+.stack > * + * {
+  margin-top: 16px;
+}
+
+.field > label:not(.check),
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
 }
 
 .key-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: stretch;
-}
-
-.key-row button {
-  flex: none;
-}
-
-/* Lets the two buttons stack rather than collide at a narrow window. */
-.row.wrap {
-  flex-wrap: wrap;
 }
 
 .key-row input {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: 13px;
+}
+
+.key-row button {
+  flex: none;
 }
 
 .seg {
@@ -90,47 +117,101 @@ header p {
 
 .seg button[aria-pressed="true"] {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
+}
+
+.advanced {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.advanced summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 0 4px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced summary::before {
+  content: "";
+  position: absolute;
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+}
+
+.summary-row::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.6px solid var(--faint);
+  border-bottom: 1.6px solid var(--faint);
+  transform: rotate(-45deg);
+  transition: transform 160ms ease;
+}
+
+.advanced[open] .summary-row::before {
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.advanced-body {
+  padding-top: 8px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
 
 .stat {
-  padding: 10px 12px;
+  padding: 12px 12px 10px;
   background: var(--panel);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .stat b {
   display: block;
-  font-size: 17px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
 }
 
 .stat span {
   display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
+}
+
+.row.wrap {
+  flex-wrap: wrap;
 }
 
 /* ---- custom filters ---- */
 
 .empty {
   margin: 0;
-  padding: 14px 0;
+  padding: 8px 0 4px;
   color: var(--muted);
 }
 
 .filter {
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 12px;
   background: var(--panel);
 }
 
@@ -139,21 +220,20 @@ header p {
 }
 
 .filter.open {
-  background: transparent;
+  background: var(--surface);
   border-color: var(--accent);
 }
 
-/* The name input sits flush in the collapsed row, so it reads as a title. */
 .filter > .row > input[type="text"] {
   background: transparent;
   border-color: transparent;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .filter > .row > input[type="text"]:hover,
 .filter.open > .row > input[type="text"] {
   border-color: var(--border);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .filter-body {
@@ -163,7 +243,7 @@ header p {
 }
 
 .filter-body textarea {
-  min-height: 56px;
+  min-height: 64px;
 }
 
 .two-up {
@@ -175,33 +255,11 @@ header p {
 .two-up label {
   display: block;
   margin-bottom: 6px;
-  font-weight: 500;
-}
-
-@media (max-width: 520px) {
-  .two-up {
-    grid-template-columns: 1fr;
-  }
-}
-
-.thresh {
-  width: 38px;
-  flex: none;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .warn {
   margin: 8px 0 0;
-}
-
-button.danger:hover:not(:disabled) {
-  color: var(--danger);
-  border-color: var(--danger);
-}
-
-input.threshold-input {
-  width: 88px;
 }
 
 .account {
@@ -214,5 +272,29 @@ input.threshold-input {
 }
 
 .accounts .account:first-child {
-  margin-top: 14px;
+  margin-top: 8px;
+}
+
+.lists h3 {
+  margin-top: 18px;
+}
+
+.lists h3:first-of-type {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 20px 14px 48px;
+  }
+
+  .mast {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stats-grid,
+  .two-up {
+    grid-template-columns: 1fr 1fr;
+  }
 }

@@ -10,6 +10,9 @@ export type MediaFilterId = 'images' | 'videos' | 'gifs';
 
 export type HideMode = 'collapse' | 'blur' | 'remove';
 
+/** Named starting points. `custom` is stored separately, on {@link Settings.preset}. */
+export type PresetId = 'light' | 'balanced' | 'strict' | 'zen';
+
 /**
  * A yes/no question the user wrote themselves. Jev takes arbitrary instructions
  * and evaluates every question in one request against the same post, so each
@@ -78,6 +81,17 @@ export interface Settings {
    * The extension never mutes or blocks; those stay on X's own confirmation.
    */
   repeatThreshold: number;
+
+  /**
+   * Which named preset matches the filter knobs. `custom` means they match none.
+   * Older saves omit this; it is filled in on load and is not a new storage key.
+   */
+  preset: PresetId | 'custom';
+  /**
+   * The preset Custom mode resets to. Kept when the knobs no longer match a preset,
+   * so "Reset to Balanced" still knows which card the user started from.
+   */
+  presetBase: PresetId;
 }
 
 export interface TweetInput {

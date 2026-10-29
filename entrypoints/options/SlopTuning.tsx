@@ -2,31 +2,73 @@ import { useEffect, useState } from 'react';
 import { clearLabels, labelsStore, type StoredLabel } from '@/lib/labels';
 import { THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
 import { fitFromLabels } from '@/lib/detect/fit';
-import { SLOP_CATEGORIES, type SlopCategory } from '@/lib/detect/score';
+import { SLOP_CATEGORIES } from '@/lib/detect/score';
 import type { Settings } from '@/lib/types';
+import { CATEGORY_HELP, LABELING_HELP, REPLY_HELP } from '@/components/help';
+import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/LabeledSlider';
 
-const CATEGORY_COPY: Record<SlopCategory, { label: string; hint: string }> = {
-  assistant: { label: 'Assistant residue', hint: 'Chatbot leftovers, flattery, unprompted pivots' },
-  profundity: { label: 'False profundity', hint: 'Announced insights, coined labels, inflated stakes' },
-  cadence: { label: 'Machine cadence', hint: 'Even rhythm, tidy bows, engagement closes' },
-  circumvention: { label: 'Circumvention', hint: 'Colons and performed casualness in place of known tells' },
-  vocabulary: { label: 'Stock vocabulary', hint: 'Full signal at two always-tier words, or a cluster of them' },
-  templates: { label: 'Templated structure', hint: 'Thread-bait, numbered lists, stacked short lines' },
-};
-
-export default function SlopTuning({
+export function SlopBuckets({
   settings,
   onChange,
 }: {
   settings: Settings;
-  onChange: (patch: Partial<Settings>) => Promise<unknown> | void;
+  onChange: (patch: Partial<Settings>) => void;
+}) {
+  return (
+    <>
+      {SLOP_CATEGORIES.map((id) => {
+        const cfg = settings.slopCategories[id];
+        const copy = CATEGORY_HELP[id];
+        if (!cfg) return null;
+        return (
+          <ConfidenceSlider
+            key={id}
+            id={`bucket-${id}`}
+            label={copy.label}
+            explanation={copy.explanation}
+            example={copy.example}
+            tipKey={id}
+            enabled={cfg.enabled}
+            onEnabled={(enabled) =>
+              onChange({
+                slopCategories: {
+                  ...settings.slopCategories,
+                  [id]: { ...cfg, enabled },
+                },
+              })
+            }
+            threshold={cfg.threshold}
+            onThreshold={(threshold) =>
+              onChange({
+                slopCategories: {
+                  ...settings.slopCategories,
+                  [id]: { ...cfg, threshold },
+                },
+              })
+            }
+          />
+        );
+      })}
+    </>
+  );
+}
+
+export function SlopAdvanced({
+  settings,
+  onChange,
+}: {
+  settings: Settings;
+  onChange: (patch: Partial<Settings>) => void;
 }) {
   const [labels, setLabels] = useState<Record<string, StoredLabel>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    labelsStore.getValue().then((stored) => setLabels(stored ?? {})).catch(() => {});
+    labelsStore
+      .getValue()
+      .then((stored) => setLabels(stored ?? {}))
+      .catch(() => {});
   }, []);
 
   const rows = Object.values(labels);
@@ -64,100 +106,47 @@ export default function SlopTuning({
   }
 
   return (
-    <section className="card">
-      <h2>Slop score</h2>
-      <p className="caption">
-        Each post is one Jev request: about thirty writing-style questions, plus local counts
-        of em dashes, stock vocabulary, and templated structure. Those become one score.
-        A bucket can also hide a post when its strongest tell clears the bar below. Bot-style
-        replies inside a thread use a lower bar. Marks stay in this browser.
-      </p>
+    <>
+      <LabeledSlider
+        id="reply-bot"
+        label={REPLY_HELP.label}
+        explanation={REPLY_HELP.explanation}
+        example={REPLY_HELP.example}
+        tipKey="reply-bot"
+        value={settings.replyBotThreshold}
+        min={THRESHOLD_MIN}
+        max={THRESHOLD_MAX}
+        step={0.05}
+        invert
+        display={`${Math.round(settings.replyBotThreshold * 100)}%`}
+        left="Relaxed"
+        right="Strict"
+        onChange={(replyBotThreshold) => onChange({ replyBotThreshold })}
+      />
 
       <div className="field">
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={settings.labeling}
-            onChange={(e) => onChange({ labeling: e.target.checked })}
-          />
-          <span>Show AI / Human marks on posts</span>
-        </label>
-      </div>
-
-      <div className="field">
-        <label htmlFor="reply-bot">Bot-style replies</label>
-        <div className="row">
-          <input
-            id="reply-bot"
-            className="grow"
-            type="range"
-            min={THRESHOLD_MIN}
-            max={THRESHOLD_MAX}
-            step={0.05}
-            value={settings.replyBotThreshold}
-            aria-label="Bot-style reply threshold"
-            onChange={(e) => onChange({ replyBotThreshold: Number(e.target.value) })}
-          />
-          <span className="thresh sub">{Math.round(settings.replyBotThreshold * 100)}%</span>
-        </div>
-        <div className="sub">
-          Used instead of the AI-slop threshold when a reply in a thread looks like a bot.
-          The bucket bars drop by the same gap.
-        </div>
-      </div>
-
-      {SLOP_CATEGORIES.map((id) => {
-        const cfg = settings.slopCategories[id];
-        const copy = CATEGORY_COPY[id];
-        return (
-          <div className="row" key={id}>
-            <label className="check grow" title={copy.hint}>
-              <input
-                type="checkbox"
-                checked={cfg.enabled}
-                onChange={(e) =>
-                  onChange({
-                    slopCategories: {
-                      ...settings.slopCategories,
-                      [id]: { ...cfg, enabled: e.target.checked },
-                    },
-                  })
-                }
-              />
-              <span>{copy.label}</span>
-            </label>
-            <input
-              type="range"
-              min={THRESHOLD_MIN}
-              max={THRESHOLD_MAX}
-              step={0.05}
-              value={cfg.threshold}
-              disabled={!cfg.enabled}
-              aria-label={`${copy.label} threshold`}
-              onChange={(e) =>
-                onChange({
-                  slopCategories: {
-                    ...settings.slopCategories,
-                    [id]: { ...cfg, threshold: Number(e.target.value) },
-                  },
-                })
-              }
-            />
-            <span className="thresh sub">{Math.round(cfg.threshold * 100)}%</span>
-          </div>
-        );
-      })}
-
-      <div className="field">
-        <div className="sub">
+        <ToggleRow
+          id="labeling"
+          label={LABELING_HELP.label}
+          explanation={LABELING_HELP.explanation}
+          example={LABELING_HELP.example}
+          tipKey="labeling"
+          checked={settings.labeling}
+          onChange={(labeling) => onChange({ labeling })}
+        />
+        <p className="hint" style={{ marginTop: 8 }}>
           {ai} AI · {human} human
           {settings.slopWeights ? ' · weights fitted from your marks' : ' · starting weights'}
-        </div>
+        </p>
         <div className="row wrap" style={{ marginTop: 10 }}>
           <button type="button" onClick={fit} disabled={busy}>
             {busy ? 'Fitting…' : 'Fit weights'}
           </button>
-          <button type="button" onClick={() => onChange({ slopWeights: null })} disabled={!settings.slopWeights}>
+          <button
+            type="button"
+            onClick={() => onChange({ slopWeights: null })}
+            disabled={!settings.slopWeights}
+          >
             Reset weights
           </button>
           <button type="button" onClick={exportLabels} disabled={rows.length === 0}>
@@ -175,8 +164,8 @@ export default function SlopTuning({
             Clear labels
           </button>
         </div>
-        {message && <div className="sub">{message}</div>}
+        {message && <p className="hint" style={{ marginTop: 8 }}>{message}</p>}
       </div>
-    </section>
+    </>
   );
 }

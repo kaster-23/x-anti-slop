@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { browser } from '#imports';
 import { MAX_CUSTOM_FILTERS, THRESHOLD_MAX, THRESHOLD_MIN, isUsable, newCustomFilter } from '@/lib/defaults';
 import type { CustomFilter } from '@/lib/types';
+import { LabeledSlider } from '@/components/LabeledSlider';
 
 /** Shown as placeholders so the shape of a good question is obvious. */
 const EXAMPLE = {
@@ -33,9 +34,9 @@ export default function CustomFilters({
   }
 
   return (
-    <section className="card">
-      <h2>Your filters</h2>
-      <p className="caption">
+    <div className="stack">
+      <h3>Your questions</h3>
+      <p className="hint">
         Ask anything you can put as a yes/no question. Each one is answered in the same request,
         so it adds roughly $0.004 per 1,000 posts.
       </p>
@@ -66,7 +67,7 @@ export default function CustomFilters({
           <span className="sub">Limit of {MAX_CUSTOM_FILTERS} reached.</span>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -173,21 +174,21 @@ function FilterRow({
             Optional, but pinning down both ends makes the score markedly more reliable.
           </div>
 
-          <div className="field">
-            <label htmlFor={`th-${filter.id}`}>Confidence needed to hide</label>
-            <div className="row">
-              <input
-                id={`th-${filter.id}`}
-                type="range"
-                min={THRESHOLD_MIN}
-                max={THRESHOLD_MAX}
-                step={0.05}
-                value={filter.threshold}
-                onChange={(e) => onPatch({ threshold: Number(e.target.value) })}
-              />
-              <span className="thresh sub">{Math.round(filter.threshold * 100)}%</span>
-            </div>
-          </div>
+          <LabeledSlider
+            id={`th-${filter.id}`}
+            label="Confidence needed to hide"
+            explanation="Hide the post when the model is at least this sure your question is true. A lower bar catches more, and gets more wrong."
+            example="Example: a post that only mentions a token in passing stays up at 90%, and is hidden at 50%."
+            value={filter.threshold}
+            min={THRESHOLD_MIN}
+            max={THRESHOLD_MAX}
+            step={0.05}
+            invert
+            display={`${Math.round(filter.threshold * 100)}%`}
+            left="Relaxed"
+            right="Strict"
+            onChange={(threshold) => onPatch({ threshold })}
+          />
 
           <div className="field">
             <label htmlFor={`s-${filter.id}`}>Try it on a post</label>

@@ -44,6 +44,10 @@ export const DEFAULT_SETTINGS: Settings = {
   allowlist: [],
   blocklist: [],
   repeatThreshold: DEFAULT_REPEAT_THRESHOLD,
+
+  /** New installs match the Balanced preset. See lib/presets.ts. */
+  preset: 'balanced',
+  presetBase: 'balanced',
 };
 
 /**

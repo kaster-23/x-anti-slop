@@ -22,7 +22,6 @@ function markup(props: Partial<Parameters<typeof RepeatAccountsView>[0]> = {}): 
     createElement(RepeatAccountsView, {
       threshold: 3,
       accounts: [],
-      onThreshold: () => {},
       onReset: () => {},
       onToggleAutoHide: () => {},
       onForget: () => {},
@@ -35,12 +34,10 @@ describe('flagged account settings section', () => {
   test('shows the default threshold and an empty list', () => {
     const html = markup();
     expect(html).toContain('Flagged accounts');
-    expect(html).toContain('Flagged posts before suggesting');
-    expect(html).toContain('value="3"');
-    expect(html).toContain('min="1"');
-    expect(html).toContain('max="20"');
+    expect(html).toContain('After an account has 3 slop or ad posts hidden');
     expect(html).toContain('No flagged accounts yet');
     expect(html).toContain('Nothing is muted or blocked');
+    expect(html).not.toContain('type="number"');
   });
 
   test('lists a handle with reset, hide, and forget', () => {
