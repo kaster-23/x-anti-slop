@@ -24,8 +24,10 @@ import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import { parseHandleList } from '@/lib/prefilter';
 import { REPEAT_THRESHOLD_MAX, REPEAT_THRESHOLD_MIN } from '@/lib/repeat';
 import CustomFilters from './CustomFilters';
+import { OptionsTabs } from './OptionsTabs';
 import RepeatAccounts from './RepeatAccounts';
 import { SlopAdvanced, SlopBuckets } from './SlopTuning';
+import { initialTab, tabFromHash, type OptionsTab } from './tabs';
 import type { HideMode, MediaFilterId, PresetId, ProviderId, Settings, SignalId, Stats } from '@/lib/types';
 
 type UndoState = { name: string; patch: Partial<Settings> };
@@ -49,15 +51,30 @@ export default function App() {
   const [allowlistText, setAllowlistText] = useState('');
   const [blocklistText, setBlocklistText] = useState('');
   const [undo, setUndo] = useState<UndoState | null>(null);
+  const [tab, setTab] = useState<OptionsTab>('filtering');
 
   useEffect(() => {
     loadSettings().then((s) => {
       setSettings(s);
       setAllowlistText(s.allowlist.join('\n'));
       setBlocklistText((s.blocklist ?? []).join('\n'));
+      const next = initialTab(window.location.hash, activeKey(s).length > 0);
+      setTab(next);
+      if (window.location.hash !== `#${next}`) history.replaceState(null, '', `#${next}`);
     });
     refreshStats();
+    function onHash() {
+      const next = tabFromHash(window.location.hash);
+      if (next) setTab(next);
+    }
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  function selectTab(id: OptionsTab) {
+    setTab(id);
+    if (window.location.hash !== `#${id}`) window.location.hash = id;
+  }
 
   function refreshStats() {
     browser.runtime
@@ -141,6 +158,24 @@ export default function App() {
           {hasKey ? 'Key connected' : 'No API key'}
         </p>
       </header>
+
+      <OptionsTabs tab={tab} onSelect={selectTab} />
+
+      <div
+        className="tab-panel"
+        role="tabpanel"
+        id="panel-filtering"
+        aria-labelledby="tab-filtering"
+        hidden={tab !== 'filtering'}
+      >
+      {!hasKey && (
+        <p className="hint tab-note">
+          No API key. Model filters are off.{' '}
+          <button type="button" className="text-btn" onClick={() => selectTab('account')}>
+            Add a key
+          </button>
+        </p>
+      )}
 
       <section className="panel" aria-labelledby="preset-heading">
         <div className="panel-head">
@@ -291,7 +326,15 @@ export default function App() {
           </div>
         </details>
       </section>
+      </div>
 
+      <div
+        className="tab-panel"
+        role="tabpanel"
+        id="panel-lists"
+        aria-labelledby="tab-lists"
+        hidden={tab !== 'lists'}
+      >
       <section className="panel lists" aria-labelledby="lists-heading">
         <div className="panel-head">
           <h2 id="lists-heading">Lists</h2>
@@ -338,7 +381,15 @@ export default function App() {
           <RepeatAccounts threshold={settings.repeatThreshold} />
         </div>
       </section>
+      </div>
 
+      <div
+        className="tab-panel"
+        role="tabpanel"
+        id="panel-appearance"
+        aria-labelledby="tab-appearance"
+        hidden={tab !== 'appearance'}
+      >
       <section className="panel" aria-labelledby="appearance-heading">
         <div className="panel-head">
           <h2 id="appearance-heading">Appearance</h2>
@@ -370,7 +421,15 @@ export default function App() {
           </p>
         </div>
       </section>
+      </div>
 
+      <div
+        className="tab-panel"
+        role="tabpanel"
+        id="panel-account"
+        aria-labelledby="tab-account"
+        hidden={tab !== 'account'}
+      >
       <section className="panel" aria-labelledby="provider-heading">
         <div className="panel-head">
           <h2 id="provider-heading">Provider and API key</h2>
@@ -511,6 +570,7 @@ export default function App() {
           </div>
         </section>
       )}
+      </div>
     </main>
   );
 }
