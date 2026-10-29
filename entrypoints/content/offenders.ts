@@ -37,10 +37,10 @@ function rememberCrossing(id: string): void {
 let state: RepeatState = { revision: 0, accounts: [] };
 let rescan: () => void = () => {};
 
-export async function startOffenders(hooks: { rescan: () => void }): Promise<void> {
+export async function startOffenders(hooks: { rescan: () => void }): Promise<() => void> {
   rescan = hooks.rescan;
   state = await loadRepeat();
-  repeatStore.watch((value) => {
+  const unwatch = repeatStore.watch((value) => {
     const next = normalizeRepeatState(value);
     // A write this tab just made is already in `state`. A lower or equal
     // revision is that echo; a higher one came from the settings page.
@@ -48,6 +48,10 @@ export async function startOffenders(hooks: { rescan: () => void }): Promise<voi
     state = next;
     rescan();
   });
+  return () => {
+    unwatch();
+    rescan = () => {};
+  };
 }
 
 export function autoHiddenReason(handle: string): string | null {
@@ -65,7 +69,7 @@ export function tagAuthor(article: HTMLElement, author: string): void {
 export function mountAccountSuggestion(article: HTMLElement, author: string, threshold: number): void {
   const handle = normalizeHandle(author);
   const host = suggestionHost(article);
-  const existing = handle ? host.querySelector<HTMLElement>(`.ct-suggest[data-handle="${handle}"]`) : null;
+  const existing = handle ? suggestionFor(host, handle) : null;
   const account = handle ? findAccount(state, handle) : undefined;
   if (!account || !shouldSuggest(account, threshold)) {
     existing?.remove();
@@ -115,13 +119,19 @@ function commit(mutator: (current: RepeatState) => RepeatState): void {
   state = { ...mutated, revision: prev.revision + 1 };
   // Queue the write before a rescan, so a scan that records more flags lines
   // up behind this change instead of landing in storage first.
-  void updateRepeat(mutator).then((stored) => {
-    if (stored.revision < state.revision) return;
-    const external = stored.revision > state.revision;
-    const hideNow = hiddenKey(state) !== hiddenKey(stored);
-    state = stored;
-    if (external || hideNow) rescan();
-  });
+  void updateRepeat(mutator)
+    .then((stored) => {
+      if (stored.revision < state.revision) return;
+      const external = stored.revision > state.revision;
+      const hideNow = hiddenKey(state) !== hiddenKey(stored);
+      state = stored;
+      if (external || hideNow) rescan();
+    })
+    .catch((err) => {
+      // The in-memory decision already applied. A failed write must not reject
+      // the timeline scan; the next flag tries storage again.
+      console.warn('[x-anti-slop] could not save flagged accounts', err);
+    });
   if (hideChanged) rescan();
 }
 
@@ -131,6 +141,20 @@ function hiddenKey(current: RepeatState): string {
     .map((account) => account.handle)
     .sort()
     .join('\n');
+}
+
+/** Match on the dataset, not a selector built from the handle. */
+function suggestionFor(root: ParentNode, handle: string): HTMLElement | null {
+  for (const node of root.querySelectorAll<HTMLElement>('.ct-suggest')) {
+    if (node.dataset.handle === handle) return node;
+  }
+  return null;
+}
+
+function removeSuggestions(handle: string): void {
+  for (const node of document.querySelectorAll<HTMLElement>('.ct-suggest')) {
+    if (node.dataset.handle === handle) node.remove();
+  }
 }
 
 function suggestionHost(article: HTMLElement): HTMLElement {
@@ -176,9 +200,7 @@ function renderSuggestion(account: FlaggedAccount, article: HTMLElement): HTMLEl
     ),
     actionButton('Not now', '', () => {
       commit((current) => dismissSuggestion(current, account.handle));
-      for (const node of document.querySelectorAll<HTMLElement>(`.ct-suggest[data-handle="${account.handle}"]`)) {
-        node.remove();
-      }
+      removeSuggestions(account.handle);
     }),
   );
 

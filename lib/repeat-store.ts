@@ -14,16 +14,28 @@ export const repeatStore = storage.defineItem<RepeatState>('local:repeatOffender
 let writeQueue: Promise<unknown> = Promise.resolve();
 
 export function updateRepeat(mutator: (state: RepeatState) => RepeatState): Promise<RepeatState> {
-  const next = writeQueue.then(async () => {
+  const next = writeQueue.then(() => persistRepeat(mutator));
+  writeQueue = next.catch(() => undefined);
+  return next;
+}
+
+/**
+ * The settings page and the timeline each have their own queue. A plain
+ * read-modify-write lets the later writer replace the earlier one. The write
+ * id is checked after the save, and the mutator runs again on whatever landed.
+ */
+async function persistRepeat(mutator: (state: RepeatState) => RepeatState): Promise<RepeatState> {
+  for (let attempt = 0; attempt < 5; attempt++) {
     const current = normalizeRepeatState(await repeatStore.getValue());
     const mutated = mutator(current);
     if (mutated === current) return current;
-    const stored: RepeatState = { ...mutated, revision: current.revision + 1 };
+    const writeId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const stored: RepeatState = { ...mutated, revision: current.revision + 1, writeId };
     await repeatStore.setValue(stored);
-    return stored;
-  });
-  writeQueue = next.catch(() => undefined);
-  return next;
+    const seen = normalizeRepeatState(await repeatStore.getValue());
+    if (seen.writeId === writeId) return seen;
+  }
+  return normalizeRepeatState(await repeatStore.getValue());
 }
 
 export async function loadRepeat(): Promise<RepeatState> {

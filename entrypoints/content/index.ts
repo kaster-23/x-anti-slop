@@ -34,7 +34,7 @@ export default defineContentScript({
   runAt: 'document_idle',
   cssInjectionMode: 'manifest',
 
-  async main() {
+  async main(ctx) {
     let settings = await loadSettings();
 
     /** X recycles DOM nodes, so decisions are remembered per status id rather
@@ -44,17 +44,24 @@ export default defineContentScript({
     const queue = new Map<string, TweetInput>();
     let flushTimer: number | undefined;
 
-    await startOffenders({
-      rescan: () => {
-        decided.clear();
-        queue.clear();
-        resetAll();
-        scan();
-      },
-    });
+    let stopOffenders = () => {};
+    try {
+      stopOffenders = await startOffenders({
+        rescan: () => {
+          decided.clear();
+          queue.clear();
+          resetAll();
+          scan();
+        },
+      });
+    } catch (err) {
+      // Repeat-offender memory is optional. A storage failure leaves posts visible
+      // to the rest of the filter instead of stopping the content script.
+      console.warn('[x-anti-slop] repeat-offender memory unavailable', err);
+    }
 
-    browser.runtime.onMessage.addListener((message: { type: string }) => {
-      if (message.type !== 'settingsChanged') return;
+    const onMessage = (message: { type?: string }) => {
+      if (message?.type !== 'settingsChanged') return;
       void (async () => {
         settings = await loadSettings();
         decided.clear();
@@ -62,10 +69,16 @@ export default defineContentScript({
         resetAll();
         scan();
       })();
-    });
+    };
+    browser.runtime.onMessage.addListener(onMessage);
 
     const observer = new MutationObserver(() => scheduleScan());
     observer.observe(document.body, { childList: true, subtree: true });
+    ctx.onInvalidated(() => {
+      observer.disconnect();
+      browser.runtime.onMessage.removeListener(onMessage);
+      stopOffenders();
+    });
     scan();
 
     let scanTimer: number | undefined;

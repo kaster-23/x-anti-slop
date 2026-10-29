@@ -38,6 +38,8 @@ export interface FlaggedAccount {
 export interface RepeatState {
   /** Bumped on every write so a tab can ignore echoes of its own saves. */
   revision: number;
+  /** Identifies the write that landed, so a raced save can be retried. */
+  writeId?: string;
   accounts: FlaggedAccount[];
 }
 
@@ -63,6 +65,7 @@ export function normalizeRepeatState(value: unknown): RepeatState {
   const accounts = Array.isArray(raw.accounts) ? raw.accounts.map(normalizeAccount).filter(present) : [];
   return {
     revision: Number.isFinite(revision) && revision > 0 ? Math.floor(revision) : 0,
+    writeId: typeof raw.writeId === 'string' ? raw.writeId : '',
     accounts: capAccounts(dedupe(accounts)),
   };
 }
