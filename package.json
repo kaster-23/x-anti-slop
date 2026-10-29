@@ -17,6 +17,7 @@
     "compile": "tsc --noEmit",
     "postinstall": "wxt prepare",
     "eval": "bun run scripts/eval.ts",
+    "eval:rules": "bun run scripts/eval-rules.ts",
     "measure": "bun run scripts/measure-prefetch.ts",
     "test": "bun test"
   },

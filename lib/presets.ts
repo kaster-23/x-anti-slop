@@ -33,6 +33,10 @@ export interface Preset {
   name: string;
   /** One line, plain language, about what the preset hides. */
   description: string;
+  /** What still shows up. Two to four short lines. */
+  willSee: readonly string[];
+  /** What gets hidden. Two to four short lines. */
+  wontSee: readonly string[];
   values: PresetValues;
 }
 
@@ -112,6 +116,15 @@ export const PRESETS: readonly Preset[] = [
     id: 'light',
     name: 'Light',
     description: 'Hides only obvious AI slop. Rage bait, ads, and promoted posts stay up.',
+    willSee: [
+      'Arguments, news, and product launches',
+      'Ads and promoted posts',
+      'Short replies and posts with a few emoji or links',
+    ],
+    wontSee: [
+      'Obvious machine-written filler',
+      'Hashtag piles, emoji piles, link dumps, and all-caps shouting',
+    ],
     values: {
       signals: {
         slop: { enabled: true, threshold: 0.9 },
@@ -138,13 +151,33 @@ export const PRESETS: readonly Preset[] = [
   {
     id: 'balanced',
     name: 'Balanced',
-    description: 'Hides clear AI slop, rage bait, ads, and promoted posts.',
+    description: 'Hides clear AI slop, rage bait, and ads. A promoted post stays if the writing is useful.',
+    willSee: [
+      'News, technical posts, and real arguments',
+      'A product launch that says what shipped',
+      'Posts with a few emoji, hashtags, or source links',
+    ],
+    wontSee: [
+      'Clear AI filler, rage bait, and sales pitches',
+      'Get-rich, casino, and empty engagement bait',
+      'Hashtag piles, emoji piles, link dumps, and shouting',
+    ],
     values: balancedValues(),
   },
   {
     id: 'strict',
     name: 'Strict',
     description: 'Hides more slop, rage bait, and ads, and flags repeat accounts sooner.',
+    willSee: [
+      'Posts with specific names, numbers, or a real point',
+      'A substantive launch, even if X marks it promoted',
+      'A sharp criticism that brings evidence',
+    ],
+    wontSee: [
+      'Borderline slop, quieter rage bait, and softer pitches',
+      'Bot-style replies that only agree or pivot',
+      'Repeat accounts after two slop or ad hides',
+    ],
     values: {
       signals: {
         slop: { enabled: true, threshold: 0.6 },
@@ -162,7 +195,7 @@ export const PRESETS: readonly Preset[] = [
       replyBotThreshold: 0.5,
       minQuality: 0,
       mediaFilters: { ...MEDIA_OFF },
-      hidePromoted: true,
+      hidePromoted: false,
       hideMode: 'collapse',
       hideUntilChecked: false,
       repeatThreshold: 2,
@@ -173,6 +206,15 @@ export const PRESETS: readonly Preset[] = [
     name: 'Zen',
     description:
       'Hides borderline slop, engagement bait, promoted posts, and low-value posts. Adds model calls and may delay posts.',
+    willSee: [
+      'Specific, useful posts with real detail',
+      'A normal reply that actually answers',
+    ],
+    wontSee: [
+      'Borderline slop, bait, and low-value filler',
+      'Every post X marks as promoted',
+      'New posts until a verdict arrives',
+    ],
     values: {
       signals: {
         slop: { enabled: true, threshold: 0.5 },

@@ -1,0 +1,174 @@
+# Filtering rules
+
+This is the contract for what gets hidden. A preset is a bundle of these rules. Custom mode is the same rules with the knobs moved one at a time.
+
+A post is judged in order:
+
+1. If you already chose to hide the rest of that account, it is hidden.
+2. On-device rules run with no model call: never-filter list, always-hide list, the promoted switch, media switches, then hashtag, emoji, link, and shouting counts.
+3. A post under five words that survived those counts stays visible. It is too short to be worth a model call.
+4. Otherwise the model scores the writing. A preset hides the post when a score clears that preset's bar.
+
+Promoted is not a kind of writing. It is a label the site puts on a paid placement. Light, Balanced, and Strict read the words. Zen hides every promoted post, paid or not, because that preset is maximum calm.
+
+## How to read a bar
+
+Every score runs from 0 to 1. The bar is the minimum score that hides. A higher bar hides fewer posts. A lower bar hides more. Turning a signal off hides none of that kind, whatever the score. These directions never reverse.
+
+## AI slop
+
+Machine-written filler: tidy lessons, announced insights, chatbot leftovers, and threads that could be pasted under any topic.
+
+Hide: "Let's unpack this. The real lesson is the mindset. Agree?"
+
+Keep: "The bug was a stale closure. p95 fell from 800ms to 220ms."
+
+Edge: a numbered list is not slop when the items are specific. A smooth paragraph with no names, numbers, or events is slop even if the tone is calm. Light only hides this when the score is very high (0.9). Balanced uses 0.7. Strict uses 0.6. Zen uses 0.5.
+
+## Rage bait
+
+Written to farm angry replies: insults, side-picking, and dares. A real argument with evidence is not rage bait.
+
+Hide: "If you disagree you cannot read, and I am done being polite."
+
+Keep: "The fare would go from 64 to 81, and the night bus is the only way home."
+
+Edge: anger plus a date, a quote, or a number stays. Anger plus "share before they delete it" goes. Light leaves rage bait up. The other presets hide clear cases.
+
+## Engagement bait
+
+The only point is a click, a comment word, or a follow. The model often files this as an ad. When AI slop is on, that ad score is also compared with the slop bar, so very obvious bait can hide even if the ads switch is off.
+
+Hide: "Comment FOCUS and I will send the checklist. The algorithm is watching."
+
+Keep: "Which document should I read first, the spec or the rollback plan?"
+
+Edge: a genuine question with a specific stake stays. "Drop a yes" with nothing else goes. Light hides it only at 0.9. Balanced hides it from 0.6 once ads are on, and from 0.7 through the slop bar.
+
+## Ads
+
+A pitch: affiliate codes, dropshipping, casino, crypto signals, vague get-rich offers. Naming a product is not an ad.
+
+Hide: "Use code SLOP20. Link in bio. Limited."
+
+Keep: "Version 2.3 adds offline drafts. We removed the forced tutorial."
+
+Edge: a price and a spec sheet is a launch, not a pitch. "NFA, we are all going to make it" is a pitch. Light leaves ordinary ads up. Balanced hides them at 0.6, Strict at 0.55, Zen at 0.5.
+
+## Promoted
+
+The site marked the post as paid. That mark is not a verdict.
+
+Hide when the words are generic bait, a get-rich or gambling offer, machine-written filler, or a misleading claim.
+
+Keep when a real product or launch has substance: what shipped, what it costs, what changed.
+
+Decision: Light, Balanced, and Strict judge the content. Zen hides every promoted post, including a good launch, so the quiet preset does not spend attention on paid inventory. The Appearance switch still exists for Custom: on means hide all promoted unread, off means judge the words.
+
+## Low quality
+
+How much a careful reader learns, from 0 to 3. 0 is noise, 3 is a post you could use. The floor hides anything below it and adds one model question. Off (0) does not ask.
+
+Hide: "Wow. Just wow. Honestly. Yeah." when the floor is above that post's score.
+
+Keep: a short recipe or a three-line incident note.
+
+Edge: posts under five words never reach this question, so "This." stays on every preset, including Zen. Zen's floor is 1.5. Light, Balanced, and Strict leave the floor off.
+
+## Bot reply
+
+A reply inside a thread that only agrees, flatters, or pivots into a generic list. The bar is lower than the main slop bar while that reply is judged. A reply that answers the parent is not a bot reply.
+
+Hide: "Great question. First, mindset. Second, systems. Third, consistency." under someone else's post.
+
+Keep: "The null is on line 214. The map is missing the default key."
+
+Edge: without the parent post on the page, a pivot is easier to mistake for a bot. Light's bar is 0.8. Balanced is 0.55. Strict and Zen are 0.5.
+
+## Hashtag spam
+
+Six or more hashtags. Settled on device for every preset.
+
+Hide: a one-line hype post with eight tags.
+
+Keep: a patch note that uses two or three tags.
+
+Edge: the count includes the quoted post. Five hashtags still go to the model.
+
+## Emoji spam
+
+Ten or more emoji. Settled on device for every preset.
+
+Hide: a caption that is mostly the same mark repeated.
+
+Keep: a real update with a few marks in the sentence.
+
+Edge: emoji inside a word are counted. Four emoji do not hide.
+
+## Link dump
+
+Five or more http links. Settled on device for every preset.
+
+Hide: "read these" followed by a stack of links and no point.
+
+Keep: a spec, a test log, a rollback plan, and an incident note. That is four links, and it stays.
+
+Edge: the bar used to be four, which hid a normal citation list. It is five so a sourced post can keep its sources.
+
+## Shouting
+
+A long run of capital letters and at least three exclamation marks. Settled on device.
+
+Hide: "THIS IS INSANE!!! SHARE IT BEFORE THEY BAN ME!!!"
+
+Keep: a headline in capitals followed by a normal sentence, with no exclamation marks.
+
+Edge: capitals alone do not hide. The bangs are required so a news headline can stay.
+
+## Media
+
+Images, videos, and GIFs. Each switch hides every post of that kind, unread. All four presets leave the switches off, so a photo or clip stays unless the words fail some other rule.
+
+Hide, with the image switch on: any post that contains a still image, including a useful diagram.
+
+Keep, with the switches off: the same diagram.
+
+Edge: the switch is blunt on purpose. It does not look at the caption. Use it only when you want that medium gone.
+
+## Blocked
+
+The always-hide list. The account disappears on this device and the post is not sent to the model. It wins over every preset. The never-filter list wins over this list if a handle is on both.
+
+Hide: any post from a handle on the list, including a useful changelog.
+
+Keep: the same words from a handle that is not on the list.
+
+## Repeat
+
+After a preset's number of slop or ad hides from one account, the next post can offer to hide the rest. Promoted posts, media-only hides, rage bait, low quality, and your own custom filters do not add to the count. Nothing here mutes or blocks on the site. Auto-hide, once you accept it, hides later posts from that account on every preset.
+
+Hide: the next post after you chose "hide the rest."
+
+Keep: a first offense, and posts that are not slop or ads.
+
+Edge: Light asks after 8. Balanced uses the default of 3. Strict uses 2. Zen uses 1, so the offer appears on the next slop or ad post.
+
+## Custom
+
+A yes/no question you wrote. It hides when the model score clears the bar you set. A higher bar hides fewer posts. A lower bar hides more. Presets do not add questions. An empty label or an empty question is not asked.
+
+Hide: a coin pitch, if your question is "is this a coin pitch?" and the score clears the bar.
+
+Keep: the same question when the score is under the bar, and any post when the question is disabled.
+
+## Other knobs
+
+Hide until checked. On, a new post stays collapsed until a verdict, and returns on its own if the check is still running after eight seconds. Zen turns it on, which is why Zen can delay posts. The others leave it off.
+
+When a post is filtered. Collapse leaves a one-line note. Blur keeps the post in place but unreadable. Remove takes it out of the timeline. This does not change what is filtered.
+
+Hide animation. Particles, blur, or off. This changes how a visible post leaves. It does not change the verdict.
+
+Text size, card style, and tag colors. These change the card, not the decision.
+
+AI and Human marks. They teach a later weight fit. They do not change the preset you are on.

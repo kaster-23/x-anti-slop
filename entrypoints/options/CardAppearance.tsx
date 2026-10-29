@@ -82,7 +82,10 @@ export default function CardAppearance({
       <p className="hint mt-8">
         Particles and blur are separate. Either plays only for a post already on screen. Reduced motion hides it at once.
       </p>
-      <div className="seg mt-14" role="group" aria-label="Hidden post text size">
+      <div className="field-label mt-14">
+        <span id="card-text-size-label">Text size</span>
+      </div>
+      <div className="seg" role="group" aria-labelledby="card-text-size-label">
         {SIZES.map((size) => (
           <button
             key={size.id}

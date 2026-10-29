@@ -20,7 +20,9 @@ describe('preset picker', () => {
     );
     expect(markup).toContain('Light');
     expect(markup).toContain('Hides only obvious AI slop');
-    expect(markup).toContain('Hides clear AI slop, rage bait, ads, and promoted posts.');
+    expect(markup).toContain('A promoted post stays if the writing is useful.');
+    expect(markup).toContain('You will see');
+    expect(markup).toContain('You won&#x27;t see');
     expect(markup).toContain('Hides more slop, rage bait, and ads');
     expect(markup).toContain('Adds model calls and may delay posts');
     expect(markup).toContain('aria-pressed="true"');

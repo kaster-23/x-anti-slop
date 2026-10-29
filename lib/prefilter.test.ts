@@ -59,7 +59,7 @@ describe('prefilter', () => {
   });
 
   test('promoted and media rules hide before the short-post skip', () => {
-    expect(prefilter(post({ text: 'hi', promoted: true }), settings())).toEqual({
+    expect(prefilter(post({ text: 'hi', promoted: true }), settings({ hidePromoted: true }))).toEqual({
       action: 'hide',
       reason: 'Promoted',
       local: true,
