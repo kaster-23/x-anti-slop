@@ -37,7 +37,8 @@ export function mountMeter(doc: Document): Meter {
   const cost = addRow(doc, body, 'Est. cost');
 
   root.append(toggle, body);
-  (doc.documentElement ?? doc.body).append(root);
+  // On body, so color inherits X's page text instead of the OS canvas color.
+  (doc.body ?? doc.documentElement).append(root);
 
   let collapsed = false;
   let latest: MeterCounts = { checked: 0, hidden: 0, settledLocally: 0, cost: 0 };
@@ -61,7 +62,9 @@ export function mountMeter(doc: Document): Meter {
       checked.textContent = counts.checked.toLocaleString();
       hidden.textContent = counts.hidden.toLocaleString();
       local.textContent = counts.settledLocally.toLocaleString();
-      cost.textContent = formatCost(counts.cost);
+      const costLabel = formatCost(counts.cost);
+      cost.textContent = costLabel;
+      if (cost.parentElement) cost.parentElement.hidden = costLabel === '';
       if (collapsed) toggle.textContent = `${counts.hidden.toLocaleString()} hidden`;
     },
     setVisible(visible) {
