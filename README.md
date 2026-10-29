@@ -111,14 +111,13 @@ pnpm build:firefox
 a Chrome profile that is already signed in to X.
 
 `pnpm eval` compares the style scorer with the clean-twitter baseline (one
-broad slop question) on a small labelled set. With a key it calls Jev, one
-post per request. With no key it uses recorded answers and says so. CI runs
-that recorded path:
+broad slop question) on a small labelled set. With no `TYPESAFE_API_KEY` it
+uses recorded answers and says so. CI runs that path. One post per request
+when the key is set:
 
 ```bash
 pnpm eval
 TYPESAFE_API_KEY=… pnpm eval
-PROVIDER=openrouter OPENROUTER_API_KEY=… pnpm eval
 ```
 
 ## Layout

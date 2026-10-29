@@ -5,12 +5,26 @@ import { fileURLToPath } from 'node:url';
 import { baselineHides, styleDecision } from '../lib/detect/compare';
 import { toSlopPost } from '../lib/provider';
 import type { TweetInput } from '../lib/types';
+import { evalModeFromEnv, LIVE_EVAL_COMMAND } from './eval-mode';
 import { SAMPLES } from './samples';
 
 interface FixtureSample {
   baseline: { slop: number; ragebait: number; ads: number };
   style: Record<string, number>;
 }
+
+describe('eval mode', () => {
+  test('stays on recorded answers unless TYPESAFE_API_KEY is set', () => {
+    expect(evalModeFromEnv({})).toEqual({ live: false });
+    expect(evalModeFromEnv({ TYPESAFE_API_KEY: '   ' })).toEqual({ live: false });
+    expect(evalModeFromEnv({ TYPESAFE_API_KEY: 'apikey_test' })).toEqual({
+      live: true,
+      provider: 'typesafe',
+      apiKey: 'apikey_test',
+    });
+    expect(LIVE_EVAL_COMMAND).toBe('TYPESAFE_API_KEY=… pnpm eval');
+  });
+});
 
 describe('recorded eval', () => {
   test('the style scorer beats the clean-twitter baseline on the labelled sample', () => {

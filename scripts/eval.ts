@@ -2,11 +2,12 @@
  * Compares the style scorer with the clean-twitter baseline on a small
  * labelled set.
  *
+ *   pnpm eval
  *   TYPESAFE_API_KEY=... pnpm eval
- *   PROVIDER=openrouter OPENROUTER_API_KEY=... pnpm eval
  *
- * With no key, the script uses recorded answers in scripts/fixtures and says
- * so. It does not call the network in that mode.
+ * With no TYPESAFE_API_KEY, the script uses recorded answers in
+ * scripts/fixtures and says so. It does not call the network in that mode.
+ * OpenRouter is optional: PROVIDER=openrouter OPENROUTER_API_KEY=... pnpm eval
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -22,7 +23,8 @@ import {
   resolveModel,
   toSlopPost,
 } from '../lib/provider';
-import type { ProviderId, Settings, TweetInput } from '../lib/types';
+import type { Settings, TweetInput } from '../lib/types';
+import { LIVE_EVAL_COMMAND, evalModeFromEnv } from './eval-mode';
 import { SAMPLES, type Sample } from './samples';
 
 interface FixtureSample {
@@ -34,9 +36,9 @@ interface FixtureFile {
   samples: FixtureSample[];
 }
 
-const provider = (process.env.PROVIDER ?? 'typesafe') as ProviderId;
-const apiKey =
-  provider === 'openrouter' ? process.env.OPENROUTER_API_KEY : process.env.TYPESAFE_API_KEY;
+const mode = evalModeFromEnv();
+const provider = mode.live ? mode.provider : 'typesafe';
+const apiKey = mode.live ? mode.apiKey : '';
 
 const settings: Settings = { ...DEFAULT_SETTINGS, provider };
 const model = resolveModel(settings);
@@ -100,13 +102,14 @@ function recordedAnswers(): FixtureSample[] {
   return parsed.samples;
 }
 
-const live = Boolean(apiKey);
+const live = mode.live;
 if (live) {
-  console.log(`source: live ${PROVIDERS[provider].label}  model=${model}`);
+  console.log(`source: live ${PROVIDERS[provider].label}  model=${model}  (key from the environment)`);
   console.log('One post per request. Baseline and style are separate calls so the question sets do not mix.\n');
 } else {
-  console.log('source: recorded fixtures (no TYPESAFE_API_KEY or OPENROUTER_API_KEY)');
-  console.log('scripts/fixtures/jev-responses.json — not live Jev output.\n');
+  console.log('source: recorded fixtures (TYPESAFE_API_KEY is not set)');
+  console.log('scripts/fixtures/jev-responses.json — not live Jev output.');
+  console.log(`Live, on a machine that has a key: ${LIVE_EVAL_COMMAND}\n`);
 }
 
 const rows = live ? await Promise.all(SAMPLES.map(liveAnswers)) : recordedAnswers();
@@ -141,5 +144,5 @@ console.log(
   `\nbaseline ${baselineCorrect}/${SAMPLES.length}   style scorer ${styleCorrect}/${SAMPLES.length}`,
 );
 if (!live) {
-  console.log('Re-run with a Jev key to score this set against the live API.');
+  console.log(`Recorded answers only. Live: ${LIVE_EVAL_COMMAND}`);
 }
