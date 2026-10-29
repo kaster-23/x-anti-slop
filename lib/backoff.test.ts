@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { REQUEST_TIMEOUT_MS, nextRetryDelay } from './provider';
+import { REQUEST_TIMEOUT_MS, nextRetryDelay, waitForRetry } from './provider';
 
 describe('request timeout and backoff', () => {
   test('each attempt gives up after about two seconds', () => {
@@ -22,5 +22,12 @@ describe('request timeout and backoff', () => {
   test('a bad key and a rejected request are not retried', () => {
     expect(nextRetryDelay(401, null, 0)).toBeNull();
     expect(nextRetryDelay(422, '1', 0)).toBeNull();
+  });
+
+  test('a retry wait ends when the slot is aborted', async () => {
+    const controller = new AbortController();
+    const pending = waitForRetry(60_000, controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

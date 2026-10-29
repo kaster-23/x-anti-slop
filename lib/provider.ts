@@ -428,6 +428,29 @@ export function parseRetryAfter(header: string | null, now = Date.now()): number
   return null;
 }
 
+/** Resolves after `ms`, or rejects if `signal` aborts. A 0ms wait still resolves. */
+export function waitForRetry(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(finish, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(abortError());
+    };
+    function finish() {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function abortError(): Error {
+  const err = new Error('The operation was aborted');
+  err.name = 'AbortError';
+  return err;
+}
+
 export function nextRetryDelay(
   status: number,
   retryAfterHeader: string | null,
@@ -493,7 +516,9 @@ export async function callSystemOne(
     const wait = headerMs !== null && (res.status === 429 || res.status === 529)
       ? delay
       : delay + Math.random() * 200;
-    await new Promise((r) => setTimeout(r, wait));
+    // The queue aborts this call when the slot budget runs out. A long
+    // retry-after must not keep requesting after that fail-open.
+    await waitForRetry(wait, opts.signal);
     return callSystemOne(opts, attempt + 1);
   }
 

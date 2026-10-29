@@ -44,7 +44,8 @@ export function prefetchRootMargin(viewportHeight: number): string {
 }
 
 /**
- * Hide-until-checked unmasks on its own if the worker never answers. This covers
- * three timed-out attempts plus the capped gaps between them.
+ * Hide-until-checked unmasks on its own if the worker never answers. The worker
+ * gives the slot 12s, so this sits just past that. A shorter failsafe would
+ * show the post and then hide it when the late verdict arrived.
  */
-export const HIDE_UNTIL_CHECKED_FAILSAFE_MS = 8_000;
+export const HIDE_UNTIL_CHECKED_FAILSAFE_MS = 13_000;
