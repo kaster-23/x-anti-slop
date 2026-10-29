@@ -196,9 +196,13 @@ describe('nextRetryDelay', () => {
     expect(nextRetryDelay(529, '2', 0)).toBe(2_000);
   });
 
-  test('does not retry a 422, a 401, or a retry-after longer than the cap', () => {
+  test('respects retry-after on 429 and 529, including a long one', () => {
+    expect(nextRetryDelay(429, '120', 0)).toBe(120_000);
+    expect(nextRetryDelay(529, '2', 0)).toBe(2_000);
+  });
+
+  test('does not retry a 422 or a 401', () => {
     expect(nextRetryDelay(422, '1', 0)).toBeNull();
     expect(nextRetryDelay(401, null, 0)).toBeNull();
-    expect(nextRetryDelay(429, '120', 0)).toBeNull();
   });
 });

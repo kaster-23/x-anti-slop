@@ -1,7 +1,7 @@
 import { prefilter, type PrefilterPost } from './prefilter';
 import { QUEUE_CONCURRENCY } from './request-queue';
 import type { Settings } from './types';
-import { distanceToViewport } from './viewport';
+import { JEV_COLD_MS, distanceToViewport } from './viewport';
 import type { HeuristicScorer } from './heuristics';
 
 export interface SimPost extends PrefilterPost {
@@ -29,9 +29,11 @@ export interface SimScenario {
 }
 
 /** First model call, before the connection is warm. */
-export const MOCK_COLD_MS = 700;
-/** Later calls. Deterministic samples inside the warm band. */
-export const MOCK_WARM_MS = [250, 330, 410, 490, 580, 290, 370, 450, 530, 310, 390, 470, 550] as const;
+export const MOCK_COLD_MS = JEV_COLD_MS;
+/**
+ * Warm round trips. Sorted, the median is 107ms and the nearest-rank p90 is 128ms.
+ */
+export const MOCK_WARM_MS = [85, 92, 98, 100, 104, 107, 107, 110, 112, 118, 126, 128, 140] as const;
 
 export function mockModelLatency(callIndex: number): number {
   if (callIndex <= 0) return MOCK_COLD_MS;

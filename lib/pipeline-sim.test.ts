@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { DEFAULT_SETTINGS } from './defaults';
-import { mockModelLatency, simulateTimeline, typesafeKeyFromEnv } from './pipeline-sim';
+import { MOCK_WARM_MS, mockModelLatency, simulateTimeline, typesafeKeyFromEnv } from './pipeline-sim';
 import { QUEUE_CONCURRENCY } from './request-queue';
 import { measureRecordedTimeline } from './timeline-fixture';
 import type { Settings } from './types';
@@ -10,12 +10,16 @@ function settings(): Settings {
 }
 
 describe('mock model latency', () => {
-  test('uses a cold first call and a warm band after that', () => {
-    expect(mockModelLatency(0)).toBe(700);
+  test('uses a 200ms cold call, then warm samples with median 107 and p90 128', () => {
+    expect(mockModelLatency(0)).toBe(200);
+    const sorted = [...MOCK_WARM_MS].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    expect(sorted[mid]).toBe(107);
+    const rank = Math.ceil(0.9 * sorted.length);
+    expect(sorted[rank - 1]).toBe(128);
+    const warm: readonly number[] = MOCK_WARM_MS;
     for (let call = 1; call < 20; call++) {
-      const warm = mockModelLatency(call);
-      expect(warm).toBeGreaterThanOrEqual(250);
-      expect(warm).toBeLessThanOrEqual(580);
+      expect(warm).toContain(mockModelLatency(call));
     }
   });
 
@@ -94,14 +98,14 @@ describe('recorded fixture timeline', () => {
     expect(result.localShare).toBeCloseTo(22 / 36);
     expect(result.mocked).toBe(true);
     const firstModel = result.modelStartOrder[0];
-    expect(byId.get(firstModel ?? '')?.verdictMs).toBe(700);
+    expect(byId.get(firstModel ?? '')?.verdictMs).toBe(200);
     expect(result.medianVerdictMs).toBe(0);
-    expect(result.medianModelVerdictMs).toBeCloseTo(430, 0);
+    expect(result.medianModelVerdictMs).toBeCloseTo(108.5, 1);
     expect(result.medianUserDelayMs).toBe(0);
     expect(result.readyBeforeView).toBe(36);
-    expect(result.maxConcurrent).toBe(3);
+    expect(result.maxConcurrent).toBe(1);
     for (const decision of result.decisions) {
-      if (!decision.local) expect(decision.verdictMs).toBeGreaterThanOrEqual(250);
+      if (!decision.local) expect(decision.verdictMs).toBeGreaterThan(0);
     }
   });
 

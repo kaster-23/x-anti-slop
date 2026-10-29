@@ -1,11 +1,12 @@
 import { DEFAULT_SETTINGS } from './defaults';
 import { simulateTimeline, type PipelineMeasurement, type SimPost } from './pipeline-sim';
+import { prefetchMarginPx } from './viewport';
 import type { Settings } from './types';
 
 /**
  * A synthetic home-timeline scroll, not a capture of X's virtualizer. Posts are
- * stacked down the page; the sim brings each one into the prefetch margin one
- * viewport before it would be seen. Jev is not called.
+ * stacked down the page; the sim brings each one into the same prefetch margin
+ * the content script uses. Jev is not called.
  */
 export interface FixturePost {
   id: string;
@@ -216,10 +217,10 @@ export const FIXTURE_SETTINGS: Settings = {
   blocklist: ['@spamking'],
 };
 
-/** One viewport of margin, scrolling about one viewport a second. */
+/** Same lookahead the content script uses, on a slightly brisker than 1-screen-per-second scroll. */
 export const FIXTURE_SCENARIO = {
   viewportHeight: 900,
-  prefetchMargin: 900,
+  prefetchMargin: prefetchMarginPx(900),
   scrollSpeedPxPerSec: 1100,
 };
 

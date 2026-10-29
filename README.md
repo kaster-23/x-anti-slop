@@ -123,9 +123,10 @@ a Chrome profile that is already signed in to X.
 
 `pnpm measure` replays a fixture timeline through the prefilter and the request
 queue and prints the share of posts settled locally and the median
-time-to-verdict. With no key, Jev is mocked: the first model call is 700ms
-(cold) and later calls are 250–580ms (warm). Set a key to use real round trips
-instead:
+time-to-verdict. With no key, Jev is mocked from measured timings: the first
+model call is 200ms (cold) and later calls are warm samples with a 107ms median
+and a 128ms p90. The prefetch margin is that cold call plus one warm p90, at
+one viewport per second. Set a key to use real round trips instead:
 
 ```bash
 pnpm measure

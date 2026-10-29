@@ -38,8 +38,6 @@ export const PROVIDERS: Record<
   },
 };
 
-/** A longer Retry-After fail-opens. Waiting it out would hold one of four slots. */
-const MAX_RETRY_DELAY_MS = 2_000;
 /** Per attempt. A hung call must not stall the timeline. */
 export const REQUEST_TIMEOUT_MS = 2_000;
 
@@ -318,8 +316,8 @@ interface CallOptions {
 
 /**
  * Delay before another attempt, or null when the call should fail open.
- * 429 and 529 wait for `retry-after` when it is present and short enough to
- * hold a concurrency slot. A longer `retry-after` is not retried early.
+ * 429 and 529 use `retry-after` when the server sends one (delta-seconds or
+ * HTTP-date). Otherwise they, and other 5xx, use exponential backoff.
  * 422 is a bug in the request and is never retried.
  */
 export function parseRetryAfter(header: string | null, now = Date.now()): number | null {
@@ -340,10 +338,7 @@ export function nextRetryDelay(
   if (attempt >= 3) return null;
   if (status !== 429 && status !== 529 && status < 500) return null;
   const headerMs = parseRetryAfter(retryAfterHeader, now);
-  if ((status === 429 || status === 529) && headerMs !== null) {
-    if (headerMs > MAX_RETRY_DELAY_MS) return null;
-    return headerMs;
-  }
+  if ((status === 429 || status === 529) && headerMs !== null) return headerMs;
   return 400 * 2 ** attempt;
 }
 

@@ -13,10 +13,10 @@ describe('request timeout and backoff', () => {
     expect(nextRetryDelay(429, null, 3)).toBeNull();
   });
 
-  test('a short Retry-After is honoured and a long one fails open', () => {
+  test('429 and 529 wait out retry-after instead of the exponential delay', () => {
     expect(nextRetryDelay(429, '1', 0)).toBe(1_000);
     expect(nextRetryDelay(529, '2', 0)).toBe(2_000);
-    expect(nextRetryDelay(429, '120', 0)).toBeNull();
+    expect(nextRetryDelay(429, '120', 0)).toBe(120_000);
   });
 
   test('a bad key and a rejected request are not retried', () => {

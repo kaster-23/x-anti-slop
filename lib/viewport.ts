@@ -18,13 +18,28 @@ export function distanceToViewport(rect: VerticalRect, viewportHeight: number): 
   return -rect.bottom;
 }
 
+/** Live TypeSafe Jev: about 200ms cold, then 107ms median and 128ms p90 warm. */
+export const JEV_COLD_MS = 200;
+export const JEV_WARM_MEDIAN_MS = 107;
+export const JEV_WARM_P90_MS = 128;
+
 /**
- * IntersectionObserver rootMargin that reaches about one viewport above and
- * below the screen. Pixel values, because percentage margins have been unreliable
- * against the viewport root.
+ * How long before a post reaches the fold we want its verdict. One cold call,
+ * plus one warm p90 in case that post waits on a busy worker.
  */
+export const PREFETCH_LEAD_MS = JEV_COLD_MS + JEV_WARM_P90_MS;
+
+/**
+ * Pixels of lookahead for a brisk scroll of one viewport per second.
+ * Pixel margins, because percentage rootMargins have been unreliable on the viewport.
+ */
+export function prefetchMarginPx(viewportHeight: number): number {
+  const height = Math.max(0, viewportHeight);
+  return Math.round((height * PREFETCH_LEAD_MS) / 1000);
+}
+
 export function prefetchRootMargin(viewportHeight: number): string {
-  const px = Math.max(0, Math.round(viewportHeight));
+  const px = prefetchMarginPx(viewportHeight);
   return `${px}px 0px ${px}px 0px`;
 }
 

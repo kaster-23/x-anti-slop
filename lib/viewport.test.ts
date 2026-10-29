@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { HIDE_UNTIL_CHECKED_FAILSAFE_MS, distanceToViewport, prefetchRootMargin } from './viewport';
+import {
+  HIDE_UNTIL_CHECKED_FAILSAFE_MS,
+  PREFETCH_LEAD_MS,
+  distanceToViewport,
+  prefetchMarginPx,
+  prefetchRootMargin,
+} from './viewport';
 
 describe('distanceToViewport', () => {
   const vh = 800;
@@ -18,9 +24,11 @@ describe('distanceToViewport', () => {
 });
 
 describe('prefetchRootMargin', () => {
-  test('extends one viewport above and below', () => {
-    expect(prefetchRootMargin(800)).toBe('800px 0px 800px 0px');
-    expect(prefetchRootMargin(800.6)).toBe('801px 0px 801px 0px');
+  test('covers a cold call plus one warm p90 at one viewport per second', () => {
+    expect(PREFETCH_LEAD_MS).toBe(200 + 128);
+    expect(prefetchMarginPx(1000)).toBe(328);
+    expect(prefetchRootMargin(1000)).toBe('328px 0px 328px 0px');
+    expect(prefetchMarginPx(800.6)).toBe(263);
     expect(prefetchRootMargin(-20)).toBe('0px 0px 0px 0px');
   });
 

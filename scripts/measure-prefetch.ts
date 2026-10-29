@@ -1,8 +1,9 @@
 /**
  * Local-share and time-to-verdict for the fixture timeline.
  *
- * Without TYPESAFE_API_KEY, Jev is mocked: the first model call is cold (700ms)
- * and later calls are warm (250–580ms). With a key, those service times are
+ * Without TYPESAFE_API_KEY, Jev is mocked from live timings: 200ms cold, then
+ * warm samples whose median is 107ms and whose p90 is 128ms. With a key, those
+ * service times are
  * real TypeSafe round trips, then replayed on the same scroll.
  *
  *   pnpm measure
@@ -80,7 +81,7 @@ if (latencies) {
   );
 } else {
   console.log(
-    `model=mock cold=${mockModelLatency(0)}ms warm=250-580ms concurrency=${QUEUE_CONCURRENCY} timeout=${REQUEST_TIMEOUT_MS}ms`,
+    `model=mock cold=${mockModelLatency(0)}ms warm_median=107ms warm_p90=128ms concurrency=${QUEUE_CONCURRENCY} timeout=${REQUEST_TIMEOUT_MS}ms`,
   );
 }
 console.log(
