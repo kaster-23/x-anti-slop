@@ -1,5 +1,6 @@
 import { isUsable } from './defaults';
 import { buildStyleQuestions, type SlopPost } from './detect/questions';
+import { redactSecrets } from './redact';
 import type { CustomFilter, ProviderId, SignalId, Settings, TweetInput } from './types';
 
 /** Pinned TypeSafe id. `jev-latest` aliases this as of the Oct 2026 models docs. */
@@ -84,6 +85,10 @@ type ChoiceQuestion = {
 };
 type Question = NoulQuestion | ScoreQuestion | ChoiceQuestion;
 
+export function capScoreCriteria(levels: readonly string[]): string[] {
+  return levels.slice(0, MAX_SCORE_LEVELS);
+}
+
 /**
  * The single broad slop question this extension used before the style bank.
  * The eval harness still asks it, so the new scorer can be compared with the
@@ -145,18 +150,14 @@ export function customKey(filter: CustomFilter): string {
 }
 
 export function toQuestion(filter: CustomFilter): Question {
-  const question: NoulQuestion = {
+  return {
     type: 'noul',
     instructions: filter.instructions.trim(),
-  };
-  // Jev accepts a bare instruction, but both ends of the scale score better.
-  if (filter.whenTrue.trim() || filter.whenFalse.trim()) {
-    question.criteria = {
+    criteria: {
       true: filter.whenTrue.trim() || 'The statement is true of this post',
       false: filter.whenFalse.trim() || 'The statement is not true of this post',
-    };
-  }
-  return question;
+    },
+  };
 }
 
 export function activeCustomFilters(settings: Settings): CustomFilter[] {
@@ -168,24 +169,21 @@ export function toSlopPost(tweet: Pick<TweetInput, 'text' | 'parentText' | 'isRe
 }
 
 /**
- * One post, one request. Style questions are added only for that post: a
- * parent-only question is omitted when this post has no parent, and nothing
- * here batches several posts into one state.
+ * One post, one request. The slop signal is the full style bank (~30 questions),
+ * not one broad noul. Rage bait and ads stay single questions. Engagement-bait
+ * slop often comes back as `ad`, so the slop filter asks that too.
  */
 export function buildQuestions(
   settings: Settings,
   post: SlopPost = { text: '' },
 ): Record<string, Question> {
   const questions: Record<string, Question> = {};
-  for (const [id, cfg] of Object.entries(settings.signals)) {
-    if (!cfg.enabled || id === 'slop') continue;
-    questions[id] = SIGNAL_QUESTIONS[id as Exclude<SignalId, 'slop'>];
+  if (settings.signals.ragebait.enabled) questions.ragebait = SIGNAL_QUESTIONS.ragebait;
+  if (settings.signals.ads.enabled || settings.signals.slop.enabled) questions.ad = SIGNAL_QUESTIONS.ads;
+  if (settings.signals.slop.enabled) Object.assign(questions, buildStyleQuestions(post));
+  if (settings.minQuality > 0) {
+    questions.quality = { ...QUALITY_QUESTION, criteria: capScoreCriteria(QUALITY_QUESTION.criteria) };
   }
-  // The slop signal is ~30 narrow style questions, not one broad noul.
-  if (settings.signals.slop.enabled) {
-    Object.assign(questions, buildStyleQuestions(post));
-  }
-  if (settings.minQuality > 0) questions.quality = QUALITY_QUESTION;
   for (const filter of activeCustomFilters(settings)) {
     questions[customKey(filter)] = toQuestion(filter);
   }
@@ -195,33 +193,103 @@ export function buildQuestions(
 /** The pre-port question set: one noul each for slop, rage bait, and ads. */
 export function buildBaselineQuestions(settings: Settings): Record<string, Question> {
   const questions: Record<string, Question> = {};
-  for (const [id, cfg] of Object.entries(settings.signals)) {
-    if (!cfg.enabled) continue;
-    questions[id] = id === 'slop' ? BASELINE_SLOP_QUESTION : SIGNAL_QUESTIONS[id as Exclude<SignalId, 'slop'>];
+  if (settings.signals.slop.enabled) questions.slop = BASELINE_SLOP_QUESTION;
+  if (settings.signals.ragebait.enabled) questions.ragebait = SIGNAL_QUESTIONS.ragebait;
+  if (settings.signals.ads.enabled) questions.ads = SIGNAL_QUESTIONS.ads;
+  if (settings.minQuality > 0) {
+    questions.quality = { ...QUALITY_QUESTION, criteria: capScoreCriteria(QUALITY_QUESTION.criteria) };
   }
-  if (settings.minQuality > 0) questions.quality = QUALITY_QUESTION;
   return questions;
 }
 
-/** A structured record rather than a blob of text, so the model can tell the
- *  author's own words apart from a quoted post. */
-export function buildState(tweet: TweetInput): Record<string, unknown> {
-  const post: Record<string, unknown> = { text: tweet.text };
-  const state: Record<string, unknown> = {
-    author_handle: tweet.author,
-    author_name: tweet.authorName,
-    text: tweet.text,
-    // Style questions name `post.text` (and `parent.text` when a reply's parent
-    // is on the page). The flat fields stay so rage-bait, ads, and custom
-    // filters still read the same state.
-    post,
+/**
+ * Long threads and quote chains are cut to this. Warm calls on ordinary posts
+ * are ~100ms; a pasted chain is not worth the extra tokens.
+ */
+export const MAX_STATE_CHARS = 4_000;
+
+function squash(value: string): string {
+  return value.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function clip(value: string, max: number): string {
+  if (value.length <= max) return value;
+  if (max <= 1) return '';
+  return `${value.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+/** The `state` field is the tweet text, not a structured record. */
+export function buildState(
+  tweet: Pick<TweetInput, 'text' | 'quotedText' | 'parentText'>,
+): string {
+  const parts = [squash(tweet.text)];
+  const parent = squash(tweet.parentText ?? '');
+  const quote = squash(tweet.quotedText ?? '');
+  if (parent) parts.push(`In reply to:\n${parent}`);
+  if (quote) parts.push(`Quoted:\n${quote}`);
+  return clip(parts.filter(Boolean).join('\n\n'), MAX_STATE_CHARS);
+}
+
+const SCORE_LABEL: Record<SignalId, string> = {
+  slop: 'AI slop',
+  ragebait: 'Rage bait',
+  ads: 'Promotional',
+};
+
+/**
+ * Hide when slop or ad clears the slop bar. A high ad score with slop turned
+ * on is still a hide: that is how engagement-bait slop comes back.
+ */
+export function hidingMatch(
+  scores: Record<string, number>,
+  settings: Settings,
+): { label: string; score: number } | null {
+  let best: { label: string; score: number } | null = null;
+  const consider = (label: string, score: number | undefined, threshold: number) => {
+    if (score === undefined || score < threshold) return;
+    if (!best || score > best.score) best = { label, score };
   };
-  if (tweet.parentText) state.parent = { text: tweet.parentText };
-  if (tweet.quotedText) state.quoted_post = tweet.quotedText;
-  const attachments = [tweet.hasImage && 'image', tweet.hasVideo && 'video'].filter(Boolean);
-  if (attachments.length) state.attachments = attachments.join(', ');
-  if (tweet.isReply) state.is_reply = true;
-  return state;
+
+  if (settings.signals.slop.enabled) {
+    const bar = settings.signals.slop.threshold;
+    consider(SCORE_LABEL.slop, scores.slop, bar);
+    consider('Ad', scores.ads, bar);
+  }
+  if (settings.signals.ragebait.enabled) {
+    consider(SCORE_LABEL.ragebait, scores.ragebait, settings.signals.ragebait.threshold);
+  }
+  if (settings.signals.ads.enabled) {
+    consider(SCORE_LABEL.ads, scores.ads, settings.signals.ads.threshold);
+  }
+  for (const filter of activeCustomFilters(settings)) {
+    consider(filter.label.trim(), scores[customKey(filter)], filter.threshold);
+  }
+  return best;
+}
+
+/**
+ * Noul answers are `{ type: 'noul', noul }` and have no confidence field.
+ * Score answers carry `score`. Question ids `ai_slop` and `ad` map back onto
+ * the settings keys `slop` and `ads`.
+ */
+export function readScores(answers: Record<string, Partial<Answer>> | undefined): {
+  scores: Record<string, number>;
+  quality?: number;
+} {
+  const scores: Record<string, number> = {};
+  let quality: number | undefined;
+  for (const [key, answer] of Object.entries(answers ?? {})) {
+    if (!answer) continue;
+    if (answer.type === 'score' && typeof answer.score === 'number') {
+      if (key === 'quality') quality = answer.score;
+      continue;
+    }
+    const noul = 'noul' in answer ? answer.noul : undefined;
+    if (typeof noul !== 'number') continue;
+    const id = key === 'ai_slop' ? 'slop' : key === 'ad' ? 'ads' : key;
+    scores[id] = noul;
+  }
+  return { scores, quality };
 }
 
 /**
@@ -268,8 +336,18 @@ export function costOf(inputTokens: number): number {
   return inputTokens * USD_PER_INPUT_TOKEN;
 }
 
+/** Floating names. Sending one would let a later release move the thresholds. */
+const FLOATING_MODELS = new Set([
+  'jev-latest',
+  'jev-preview',
+  'typesafe/jev-latest',
+  '~typesafe/jev-latest',
+]);
+
 export function resolveModel(settings: { provider: ProviderId; model: string }): string {
-  return settings.model.trim() || PROVIDERS[settings.provider].defaultModel;
+  const requested = settings.model.trim();
+  if (!requested || FLOATING_MODELS.has(requested)) return PROVIDERS[settings.provider].defaultModel;
+  return requested;
 }
 
 interface CallOptions {
@@ -284,8 +362,7 @@ interface CallOptions {
 /**
  * The body a smoke test measured: `{ model, state, questions }`, with each
  * question limited to `{ type, instructions, criteria }`. State is the tweet
- * (a string, or one object that holds that tweet's text). Questions for
- * several posts never share a body.
+ * text. Questions for several posts never share a body.
  */
 export function systemOneBody(
   model: string,
@@ -329,7 +406,38 @@ export function systemOneBody(
   return { model, state, questions: wire };
 }
 
-/** Retries 429/529/5xx with exponential backoff. */
+/**
+ * Delay before another attempt, or null when the call should fail open.
+ * 429 and 529 wait for `retry-after` when it is present and short enough to
+ * hold a concurrency slot. A longer `retry-after` is not retried early.
+ * 422 is a bug in the request and is never retried.
+ */
+export function parseRetryAfter(header: string | null, now = Date.now()): number | null {
+  if (header === null || header.trim() === '') return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const when = Date.parse(header);
+  if (Number.isFinite(when)) return Math.max(0, when - now);
+  return null;
+}
+
+export function nextRetryDelay(
+  status: number,
+  retryAfterHeader: string | null,
+  attempt: number,
+  now = Date.now(),
+): number | null {
+  if (attempt >= 3) return null;
+  if (status !== 429 && status !== 529 && status < 500) return null;
+  const headerMs = parseRetryAfter(retryAfterHeader, now);
+  if ((status === 429 || status === 529) && headerMs !== null) {
+    if (headerMs > MAX_RETRY_DELAY_MS) return null;
+    return headerMs;
+  }
+  return 400 * 2 ** attempt;
+}
+
+/** Retries 429/529/5xx. 401 is a bad key. 422 is a bug. Both fail open. */
 export async function callSystemOne(
   opts: CallOptions,
   attempt = 0,
@@ -358,45 +466,57 @@ export async function callSystemOne(
     if ((err as Error).name === 'TimeoutError') {
       throw new ProviderError(`No response after ${REQUEST_TIMEOUT_MS / 1000}s`, 0, true);
     }
-    throw new ProviderError(`Network error: ${(err as Error).message}`, 0, true);
+    throw new ProviderError(redactSecrets(`Network error: ${(err as Error).message}`), 0, true);
   }
 
   if (res.ok) return (await res.json()) as SystemOneResponse;
 
-  const retryable = res.status === 429 || res.status === 529 || res.status >= 500;
-  if (retryable && attempt < 3) {
-    // Clamped: the wait happens while holding a concurrency slot, so an honoured
-    // `retry-after: 3600` would stall every other post behind it for an hour.
-    const headerDelay = Number(res.headers.get('retry-after')) * 1000;
-    const delay = Number.isFinite(headerDelay) && headerDelay > 0
-      ? Math.min(headerDelay, MAX_RETRY_DELAY_MS)
-      : 400 * 2 ** attempt + Math.random() * 200;
-    await new Promise((r) => setTimeout(r, delay));
+  if (res.status === 422) {
+    const detail = redactSecrets(await errorDetail(res));
+    console.error('[x-anti-slop] 422 from Jev. This is a bug in the request, not the key.', detail);
+    throw new ProviderError(
+      'The filter request was rejected (422). This is a bug in the extension, not your key.',
+      422,
+      false,
+    );
+  }
+
+  const retryAfter = res.headers.get('retry-after');
+  const delay = nextRetryDelay(res.status, retryAfter, attempt);
+  if (delay !== null) {
+    const headerMs = parseRetryAfter(retryAfter);
+    const wait = headerMs !== null && (res.status === 429 || res.status === 529)
+      ? delay
+      : delay + Math.random() * 200;
+    await new Promise((r) => setTimeout(r, wait));
     return callSystemOne(opts, attempt + 1);
   }
 
-  throw new ProviderError(await describeError(res), res.status, retryable);
+  throw new ProviderError(await describeError(res), res.status, false);
+}
+
+async function errorDetail(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    const detail = body?.error?.message ?? body?.message ?? body?.detail ?? '';
+    return typeof detail === 'string' ? detail : JSON.stringify(detail);
+  } catch {
+    return '';
+  }
 }
 
 async function describeError(res: Response): Promise<string> {
-  let detail = '';
-  try {
-    const body = await res.json();
-    detail = body?.error?.message ?? body?.message ?? body?.detail ?? '';
-    if (typeof detail !== 'string') detail = JSON.stringify(detail);
-  } catch {
-    /* non-JSON body */
-  }
+  const detail = await errorDetail(res);
   switch (res.status) {
     case 401:
+      return 'Check your key. The provider rejected it (401).';
     case 403:
-      return 'Invalid API key — check it in the extension settings.';
-    case 422:
-      return `Request rejected: ${detail || 'validation failed'}`;
+      return 'The provider refused this key (403).';
     case 429:
+    case 529:
       return 'Rate limited by the provider. Slow down or try again shortly.';
     default:
-      return detail ? `${res.status}: ${detail}` : `Request failed (${res.status})`;
+      return redactSecrets(detail ? `${res.status}: ${detail}` : `Request failed (${res.status})`);
   }
 }
 
@@ -415,7 +535,7 @@ export async function testFilter(
       provider: settings.provider,
       apiKey,
       model: resolveModel(settings),
-      state: { author_handle: '', author_name: '', text },
+      state: buildState({ text }),
       questions: { probe: toQuestion(filter) },
     });
     const answer = res.answers.probe;
@@ -438,7 +558,13 @@ export async function testCredentials(
       apiKey,
       model: model.trim() || PROVIDERS[provider].defaultModel,
       state: 'hello',
-      questions: { ping: { type: 'noul', instructions: 'This text is a greeting.' } },
+      questions: {
+        ping: {
+          type: 'noul',
+          instructions: 'This text is a greeting.',
+          criteria: { true: 'It is a greeting', false: 'It is not a greeting' },
+        },
+      },
     });
     return { ok: true, model: res.model };
   } catch (err) {

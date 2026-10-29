@@ -29,9 +29,9 @@ export default defineConfig({
             gecko: {
               id: 'x-anti-slop@kaster-23',
               // New Firefox extensions must declare off-device transmission.
-              // Post text, handle, and display name leave the browser.
+              // The background worker sends post text (and a trimmed quote) off-device.
               data_collection_permissions: {
-                required: ['websiteContent', 'personalCommunications'],
+                required: ['websiteContent'],
               },
             },
           },

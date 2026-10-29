@@ -43,8 +43,8 @@ pnpm build:firefox
 
 Load `.output/firefox-mv2` as a temporary add-on (`about:debugging` → This
 Firefox → Load Temporary Add-on, and pick `manifest.json` inside that folder).
-Firefox asks you to allow sending website content and personal communications
-(the post text, handle, and display name) before the extension can run.
+Firefox asks you to allow sending website content (the post text) before the
+extension can run.
 
 ## API key
 
@@ -76,17 +76,18 @@ Leave the model field blank to use the default. The defaults are the current
 versioned ids from the TypeSafe models page and the OpenRouter Jev guide
 (checked 29 October 2026). `jev-latest` on TypeSafe aliases `jev-1.14.0`, and
 `~typesafe/jev-latest` on OpenRouter tracks the newest release. This extension
-pins the versioned ids so a later alias move does not silently change the
-thresholds.
+sends the versioned ids, and rewrites those floating names if they are typed
+in, so a later alias move does not silently change the thresholds.
 
 TypeSafe keys look like `apikey_…`. OpenRouter keys look like `sk-or-…`.
 
 ## Privacy
 
 For each post that has not already been judged, the background worker sends the
-author's handle, display name, and post text (plus quoted text, when present)
-to the provider you selected. It also sends whether the post has an image or
-video, and whether it is a reply. It does not upload the media itself.
+post text, and a trimmed quote when there is one, as the request `state`. A
+very long thread or quote chain is cut before it is sent. The call is made
+only from the background worker. It does not upload media, and it does not send
+the handle or display name as their own fields.
 
 Direct messages and the settings pages are excluded. Verdicts are cached by
 tweet id, so a post is sent at most once until you clear the cache. The full

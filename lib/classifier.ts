@@ -1,34 +1,21 @@
 import { storage } from '#imports';
 import {
-  activeCustomFilters,
   buildQuestions,
   buildState,
   callSystemOne,
   costOf,
-  customKey,
+  hidingMatch,
+  readScores,
   resolveModel,
   toSlopPost,
-  type NoulAnswer,
-  type ScoreAnswer,
 } from './provider';
-import { djb2 } from './hash';
+import { questionSignature } from './signature';
+import { redactSecrets } from './redact';
 import { activeKey, slopThresholdsOf } from './defaults';
 import { EMPTY_STATS, statsStore } from './settings';
-import {
-  featureVector,
-  judgeSlop,
-  resolveWeights,
-  scoringFingerprint,
-  slopExceeds,
-  type SlopCategory,
-} from './detect/score';
-import type { Settings, SignalId, Stats, TweetInput, Verdict } from './types';
+import { featureVector, judgeSlop, resolveWeights, slopExceeds, type SlopCategory } from './detect/score';
+import type { Settings, Stats, TweetInput, Verdict } from './types';
 
-const SIGNAL_LABELS: Record<SignalId, string> = {
-  slop: 'AI slop',
-  ragebait: 'Rage bait',
-  ads: 'Promotional',
-};
 
 /** Jev allows 1200 req/min, so this is well inside the limit. */
 const MAX_CONCURRENCY = 6;
@@ -47,7 +34,12 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const inFlight = new Map<string, Promise<Verdict>>();
+const inFlight = new Map<string, Promise<CacheEntry>>();
+/** Bumped by clearCache so a request already on the wire cannot refill the cache. */
+let cacheEpoch = 0;
+/** Orders cache writes so an older in-flight request cannot replace a newer one. */
+let nextSeq = 0;
+const committedSeq = new Map<string, number>();
 let cacheLoading: Promise<void> | undefined;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -84,41 +76,15 @@ async function flushCache() {
 }
 
 export async function clearCache() {
+  cacheEpoch += 1;
   cache.clear();
+  committedSeq.clear();
+  // Drop the map so a caller that starts after the clear does not join a
+  // request that was already in flight and then skip the network.
+  inFlight.clear();
   clearTimeout(flushTimer);
   flushTimer = undefined;
   await cacheStore.setValue({});
-}
-
-/** Fingerprints everything that changes a verdict, so stale cache entries
- *  stop matching and get re-checked. */
-function questionSignature(settings: Settings): string {
-  const on = Object.entries(settings.signals)
-    .filter(([, c]) => c.enabled)
-    .map(([id]) => id)
-    .sort();
-  // Hashes the wording too, so editing a filter's text re-checks affected posts.
-  const custom = activeCustomFilters(settings)
-    .map((f) => `${f.id}:${f.instructions}:${f.whenTrue}:${f.whenFalse}`)
-    .sort()
-    .join('|');
-  const thresholds = Object.entries(settings.signals)
-    .map(([id, cfg]) => `${id}:${cfg.enabled ? 1 : 0}:${cfg.threshold}`)
-    .join(',');
-  const customThresholds = activeCustomFilters(settings)
-    .map((f) => `${f.id}@${f.threshold}`)
-    .sort()
-    .join(',');
-  const weights = resolveWeights(settings.slopWeights);
-  return [
-    on.join(','),
-    `q${settings.minQuality}`,
-    resolveModel(settings),
-    djb2(custom),
-    thresholds,
-    customThresholds,
-    scoringFingerprint(weights, slopThresholdsOf(settings)),
-  ].join('|');
 }
 
 function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
@@ -133,43 +99,28 @@ function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
     filtered: false,
   };
 
-  // The strongest signal over its threshold becomes the reason shown.
-  let best: { label: string; score: number } | null = null;
-  for (const [signal, cfg] of Object.entries(settings.signals)) {
-    if (!cfg.enabled) continue;
-    if (signal === 'slop') {
-      const hit = slopExceeds(
-        {
-          score: entry.scores.slop ?? 0,
-          categories: {
-            assistant: 0,
-            profundity: 0,
-            cadence: 0,
-            circumvention: 0,
-            vocabulary: 0,
-            templates: 0,
-            ...entry.categoryScores,
-          },
-          humanVeto: entry.humanVeto === true,
-          botReply: entry.botReply === true,
+  // Ads and rage bait use their own bars. A high ad score also hides when slop
+  // is on. The style score adds category bars and the lower reply-bot bar.
+  let best = hidingMatch(entry.scores, settings);
+  if (settings.signals.slop.enabled) {
+    const hit = slopExceeds(
+      {
+        score: entry.scores.slop ?? 0,
+        categories: {
+          assistant: 0,
+          profundity: 0,
+          cadence: 0,
+          circumvention: 0,
+          vocabulary: 0,
+          templates: 0,
+          ...entry.categoryScores,
         },
-        slopThresholdsOf(settings),
-      );
-      if (!hit) continue;
-      if (!best || hit.score > best.score) best = { label: SIGNAL_LABELS.slop, score: hit.score };
-      continue;
-    }
-    const score = entry.scores[signal as SignalId];
-    if (score === undefined || score < cfg.threshold) continue;
-    if (!best || score > best.score) {
-      best = { label: SIGNAL_LABELS[signal as SignalId], score };
-    }
-  }
-
-  for (const filter of activeCustomFilters(settings)) {
-    const score = entry.scores[customKey(filter)];
-    if (score === undefined || score < filter.threshold) continue;
-    if (!best || score > best.score) best = { label: filter.label.trim(), score };
+        humanVeto: entry.humanVeto === true,
+        botReply: entry.botReply === true,
+      },
+      slopThresholdsOf(settings),
+    );
+    if (hit && (!best || hit.score > best.score)) best = { label: 'AI slop', score: hit.score };
   }
 
   if (best) {
@@ -224,7 +175,10 @@ async function flushStats() {
   } catch (err) {
     // Put the counts back so the next flush retries them rather than losing them.
     mergeInto((pending ??= emptyDelta()), delta);
-    console.warn('[x-anti-slop] stats write failed', err);
+    console.warn(
+      '[x-anti-slop] stats write failed',
+      redactSecrets(err instanceof Error ? err.message : String(err)),
+    );
   }
 }
 
@@ -317,19 +271,19 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * One post, one request. The style bank is about 30 questions on that post's
- * text. A smoke test put a 30-question call at the same warm latency as a
- * 3-question call (~80–125 ms) and about 1,070 input tokens, so the questions
- * are not split across requests. Several posts in one state would make the
- * questions ambiguous about which post they refer to.
+ * One post, one request. The style bank rides in that same call. A 30-question
+ * request has the same warm latency as a 3-question one, so the questions are
+ * not split. Returns the score entry, not a verdict.
  */
-async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdict> {
+async function fetchEntry(
+  tweet: TweetInput,
+  settings: Settings,
+  sig: string,
+  seq: number,
+  epoch: number,
+): Promise<CacheEntry> {
   const post = toSlopPost(tweet);
   const questions = buildQuestions(settings, post);
-  if (Object.keys(questions).length === 0) {
-    return { id: tweet.id, scores: {}, filtered: false };
-  }
-
   const res = await withSlot(() =>
     callSystemOne({
       provider: settings.provider,
@@ -340,20 +294,15 @@ async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdi
     }),
   );
 
-  const entry: CacheEntry = { scores: {}, sig: questionSignature(settings), at: Date.now() };
-  for (const [key, answer] of Object.entries(res.answers)) {
-    if (key === 'quality' && answer.type === 'score') {
-      entry.quality = (answer as ScoreAnswer).score;
-    } else if (answer.type === 'noul' && (key === 'ragebait' || key === 'ads' || key.startsWith('cf_'))) {
-      entry.scores[key] = (answer as NoulAnswer).noul;
-    }
-  }
+  const read = readScores(res.answers);
+  const entry: CacheEntry = { scores: read.scores, quality: read.quality, sig, at: Date.now() };
 
   if (settings.signals.slop.enabled) {
     const weights = resolveWeights(settings.slopWeights);
-    const styleAnswers: Record<string, NoulAnswer | ScoreAnswer> = {};
+    const styleAnswers: Record<string, { type: 'noul'; noul: number } | { type: 'score'; score: number }> = {};
     for (const [key, answer] of Object.entries(res.answers)) {
-      if (answer.type === 'noul' || answer.type === 'score') styleAnswers[key] = answer;
+      if (answer.type === 'noul') styleAnswers[key] = { type: 'noul', noul: answer.noul };
+      else if (answer.type === 'score') styleAnswers[key] = { type: 'score', score: answer.score };
     }
     const features = featureVector(styleAnswers, post);
     const judged = judgeSlop(features, weights, post, slopThresholdsOf(settings));
@@ -364,12 +313,50 @@ async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdi
     entry.features = features;
   }
 
-  cache.set(tweet.id, entry);
-  scheduleFlush();
+  // A clear, or a newer question set for this post, wins over a response that
+  // was already in flight.
+  if (epoch === cacheEpoch && seq >= (committedSeq.get(tweet.id) ?? 0)) {
+    committedSeq.set(tweet.id, seq);
+    cache.set(tweet.id, entry);
+    scheduleFlush();
+  }
 
   const verdict = decide(tweet.id, entry, settings);
   recordUsage(res.usage?.input_tokens ?? 0, verdict.filtered, verdict.reason);
-  return verdict;
+  return entry;
+}
+
+async function classifyTweet(tweet: TweetInput, settings: Settings, sig: string): Promise<Verdict> {
+  const hit = cache.get(tweet.id);
+  if (hit?.sig === sig) return { ...decide(tweet.id, hit, settings), cached: true };
+
+  if (Object.keys(buildQuestions(settings)).length === 0) {
+    return { id: tweet.id, scores: {}, filtered: false };
+  }
+
+  const flightKey = `${tweet.id}\0${sig}`;
+  let pending = inFlight.get(flightKey);
+  if (!pending) {
+    const seq = ++nextSeq;
+    const epoch = cacheEpoch;
+    const promise = fetchEntry(tweet, settings, sig, seq, epoch).finally(() => {
+      if (inFlight.get(flightKey) === promise) inFlight.delete(flightKey);
+    });
+    inFlight.set(flightKey, promise);
+    pending = promise;
+  }
+
+  try {
+    const entry = await pending;
+    return { ...decide(tweet.id, entry, settings) };
+  } catch (err) {
+    return {
+      id: tweet.id,
+      scores: {},
+      filtered: false,
+      error: redactSecrets((err as Error).message || 'Classification failed'),
+    };
+  }
 }
 
 export async function classify(
@@ -378,28 +365,7 @@ export async function classify(
 ): Promise<Verdict[]> {
   await ensureCache();
   const sig = questionSignature(settings);
-
-  const verdicts = await Promise.all(
-    tweets.map(async (tweet) => {
-      const hit = cache.get(tweet.id);
-      if (hit && hit.sig === sig) return { ...decide(tweet.id, hit, settings), cached: true };
-
-      const pending = inFlight.get(tweet.id);
-      if (pending) return pending;
-
-      const promise = classifyOne(tweet, settings)
-        .catch((err): Verdict => ({
-          id: tweet.id,
-          scores: {},
-          filtered: false,
-          error: (err as Error).message,
-        }))
-        .finally(() => inFlight.delete(tweet.id));
-
-      inFlight.set(tweet.id, promise);
-      return promise;
-    }),
-  );
+  const verdicts = await Promise.all(tweets.map((tweet) => classifyTweet(tweet, settings, sig)));
 
   // Settled once per batch: a batch that reached the API at all clears the
   // banner, one that could not raises it.

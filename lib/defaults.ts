@@ -96,3 +96,8 @@ export function slopThresholdsOf(settings: Settings): SlopThresholds {
     categories: settings.slopCategories,
   };
 }
+
+/** Settings safe to hand to a content script or the popup. The key stays in storage. */
+export function blankKeys(settings: Settings): Settings {
+  return { ...settings, typesafeApiKey: '', openrouterApiKey: '' };
+}
