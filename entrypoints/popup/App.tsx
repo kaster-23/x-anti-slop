@@ -114,10 +114,10 @@ export default function App() {
             <span className="grow">
               {apiError.message}{' '}
               {apiError.message.startsWith('Check your key') && (
-                <a href="#" onClick={openOptions}>
-                  Open settings
-                </a>
-              )}
+                  <a href="#" onClick={(event) => openOptions(event, 'account')}>
+                    Open settings
+                  </a>
+                )}
             </span>
             <button
               type="button"
@@ -137,7 +137,7 @@ export default function App() {
       {!hasKey && (
         <div className="notice">
           No API key. Model filters are off.{' '}
-          <a href="#" onClick={openOptions}>
+          <a href="#" onClick={(event) => openOptions(event, 'account')}>
             Add a {PROVIDERS[settings.provider].name} key
           </a>
           .
@@ -288,7 +288,21 @@ export default function App() {
   );
 }
 
-function openOptions(event: React.MouseEvent) {
+function openOptions(event: React.MouseEvent, hash: 'filtering' | 'account' = 'filtering') {
   event.preventDefault();
-  browser.runtime.openOptionsPage();
+  const base = browser.runtime.getURL('/options.html');
+  const url = `${base}#${hash}`;
+  void browser.tabs
+    .query({})
+    .then(async (tabs) => {
+      const open = tabs.find((tab) => tab.url?.startsWith(base));
+      if (open?.id != null) {
+        await browser.tabs.update(open.id, { active: true, url });
+        return;
+      }
+      await browser.tabs.create({ url });
+    })
+    .catch(() => {
+      void browser.runtime.openOptionsPage();
+    });
 }

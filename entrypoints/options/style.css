@@ -36,6 +36,51 @@ body {
   color: var(--text);
 }
 
+.tabs {
+  display: flex;
+  gap: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs button {
+  margin: 0;
+  padding: 10px 0 12px;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tabs button:hover:not(:disabled) {
+  color: var(--text);
+  border-bottom-color: var(--line-strong);
+}
+
+.tabs button[aria-selected="true"],
+.tabs button[aria-selected="true"]:hover:not(:disabled) {
+  color: var(--text);
+  background: transparent;
+  border-bottom-color: var(--text);
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
+.tab-panel > .panel:first-child {
+  border-top: none;
+  padding-top: 28px;
+}
+
+.tab-note {
+  margin-top: 20px;
+}
+
 .panel {
   padding: 32px 0;
   border-top: 1px solid var(--line);
