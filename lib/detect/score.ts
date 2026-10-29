@@ -249,11 +249,18 @@ export function probability(
   return Math.max(weightedProbability(features, weights), hardRule(features, post)?.value ?? 0);
 }
 
-export function categoryScores(features: Record<string, number>): Record<SlopCategory, number> {
+export function categoryScores(
+  features: Record<string, number>,
+  post: SlopPost = { text: '' },
+): Record<SlopCategory, number> {
   const scores = {} as Record<SlopCategory, number>;
   for (const id of SLOP_CATEGORIES) {
     let best = 0;
     for (const feature of SLOP_CATEGORY_FEATURES[id]) {
+      // A reply whose parent was not on the page cannot be checked for a pivot.
+      // The hard rule already skips that case; the bucket must too, or the
+      // same tell hides the post through profundity.
+      if (!isCheckable(feature, post)) continue;
       best = Math.max(best, features[feature] ?? 0);
     }
     scores[id] = best;
@@ -345,7 +352,7 @@ export function judgeSlop(
 ): SlopJudgment {
   const summary: SlopSummary = {
     score: probability(features, weights, post),
-    categories: categoryScores(features),
+    categories: categoryScores(features, post),
     humanVeto: humanVeto(features) !== null,
     botReply: isBotStyleReply(post, features),
   };
