@@ -9,6 +9,7 @@ import {
   buildState,
   capScoreCriteria,
   customKey,
+  formatCost,
   hidingMatch,
   nextRetryDelay,
   readScores,
@@ -258,6 +259,27 @@ describe('hidingMatch', () => {
     const match = hidingMatch({ slop: 0.1, ads: 0.9 }, settings);
     expect(match?.label).toBe('Ad');
     expect(match?.score).toBeGreaterThan(0.8);
+  });
+});
+
+describe('formatCost', () => {
+  test('shows nothing when the cost is zero or not a number', () => {
+    expect(formatCost(0)).toBe('');
+    expect(formatCost(-0.04)).toBe('');
+    expect(formatCost(Number.NaN)).toBe('');
+    expect(formatCost(Number.POSITIVE_INFINITY)).toBe('');
+  });
+
+  test('uses a cent floor while the amount is above zero and under one cent', () => {
+    expect(formatCost(0.000042)).toBe('<$0.01');
+    expect(formatCost(0.009)).toBe('<$0.01');
+  });
+
+  test('uses two decimals from one cent up', () => {
+    expect(formatCost(0.01)).toBe('$0.01');
+    expect(formatCost(0.1)).toBe('$0.10');
+    expect(formatCost(1.2)).toBe('$1.20');
+    expect(formatCost(12.345)).toBe('$12.35');
   });
 });
 

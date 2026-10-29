@@ -336,11 +336,14 @@ export function costOf(inputTokens: number): number {
   return inputTokens * USD_PER_INPUT_TOKEN;
 }
 
-/** Small session totals need more digits than a lifetime total does. */
+/**
+ * One display for every cost figure. Zero is blank. Anything under a cent
+ * is a floor, because two decimals would round it to $0.00.
+ */
 export function formatCost(usd: number): string {
-  if (!Number.isFinite(usd) || usd <= 0) return '$0.0000';
-  if (usd < 0.001) return `$${usd.toFixed(6)}`;
-  return `$${usd.toFixed(4)}`;
+  if (!Number.isFinite(usd) || usd <= 0) return '';
+  if (usd < 0.01) return '<$0.01';
+  return `$${usd.toFixed(2)}`;
 }
 
 /** Floating names. Sending one would let a later release move the thresholds. */
