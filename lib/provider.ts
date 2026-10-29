@@ -1,4 +1,5 @@
 import { isUsable } from './defaults';
+import { redactSecrets } from './redact';
 import type { CustomFilter, ProviderId, SignalId, Settings, TweetInput } from './types';
 
 /**
@@ -243,7 +244,7 @@ export async function callSystemOne(
     if ((err as Error).name === 'TimeoutError') {
       throw new ProviderError(`No response after ${REQUEST_TIMEOUT_MS / 1000}s`, 0, true);
     }
-    throw new ProviderError(`Network error: ${(err as Error).message}`, 0, true);
+    throw new ProviderError(redactSecrets(`Network error: ${(err as Error).message}`), 0, true);
   }
 
   if (res.ok) return (await res.json()) as SystemOneResponse;
@@ -277,11 +278,11 @@ async function describeError(res: Response): Promise<string> {
     case 403:
       return 'Invalid API key — check it in the extension settings.';
     case 422:
-      return `Request rejected: ${detail || 'validation failed'}`;
+      return redactSecrets(`Request rejected: ${detail || 'validation failed'}`);
     case 429:
       return 'Rate limited by the provider. Slow down or try again shortly.';
     default:
-      return detail ? `${res.status}: ${detail}` : `Request failed (${res.status})`;
+      return redactSecrets(detail ? `${res.status}: ${detail}` : `Request failed (${res.status})`);
   }
 }
 
