@@ -27,8 +27,9 @@ export default defineContentScript({
   runAt: 'document_idle',
   cssInjectionMode: 'manifest',
 
-  async main() {
+  async main(ctx) {
     let settings = await loadSettings();
+    if (ctx.isInvalid) return;
 
     /** X recycles DOM nodes, so decisions are remembered per status id rather
      *  than per element. */
@@ -36,32 +37,62 @@ export default defineContentScript({
     const revealed = new Set<string>();
     const queue = new Map<string, TweetInput>();
     let flushTimer: number | undefined;
+    let scanTimer: number | undefined;
+    /** Bumped on every settings push. In-flight scans and failsafe timers
+     *  captured the previous value and must not apply it afterwards. */
+    let epoch = 0;
 
-    browser.runtime.onMessage.addListener((message: { type: string }) => {
-      if (message.type !== 'settingsChanged') return;
+    const onMessage = (message: { type?: string }) => {
+      if (message?.type !== 'settingsChanged') return;
+      const generation = ++epoch;
       void (async () => {
-        settings = await loadSettings();
+        try {
+          settings = await loadSettings();
+        } catch (err) {
+          // Fail open: a settings read that throws should not leave posts hidden.
+          console.warn('[x-anti-slop] settings reload failed', err);
+          if (generation !== epoch || ctx.isInvalid) return;
+          settings = { ...settings, enabled: false };
+        }
+        if (generation !== epoch || ctx.isInvalid) return;
         decided.clear();
         queue.clear();
+        if (flushTimer !== undefined) {
+          clearTimeout(flushTimer);
+          flushTimer = undefined;
+        }
         resetAll();
         scan();
       })();
-    });
+    };
+
+    browser.runtime.onMessage.addListener(onMessage);
 
     const observer = new MutationObserver(() => scheduleScan());
-    observer.observe(document.body, { childList: true, subtree: true });
+    const root = document.body ?? document.documentElement;
+    observer.observe(root, { childList: true, subtree: true });
+
+    // A re-injected script (extension reload or update) invalidates this
+    // context. Without the disconnect, the old observer and listener keep
+    // running beside the new ones for the rest of the tab.
+    ctx.onInvalidated(() => {
+      observer.disconnect();
+      browser.runtime.onMessage.removeListener(onMessage);
+    });
+
     scan();
 
-    let scanTimer: number | undefined;
     function scheduleScan() {
+      if (ctx.isInvalid) return;
       if (scanTimer !== undefined) return;
-      scanTimer = window.setTimeout(() => {
+      scanTimer = ctx.setTimeout(() => {
         scanTimer = undefined;
         scan();
       }, 60);
     }
 
     function scan() {
+      if (ctx.isInvalid) return;
       if (!settings.enabled || onExcludedRoute()) return;
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
         process(article);
@@ -122,11 +153,14 @@ export default defineContentScript({
 
     function scheduleFlush() {
       if (flushTimer !== undefined) return;
-      flushTimer = window.setTimeout(flush, BATCH_DEBOUNCE_MS);
+      flushTimer = ctx.setTimeout(() => {
+        flushTimer = undefined;
+        void flush();
+      }, BATCH_DEBOUNCE_MS);
     }
 
     async function flush() {
-      flushTimer = undefined;
+      const generation = epoch;
       if (queue.size === 0) return;
       const tweets = [...queue.values()];
       queue.clear();
@@ -137,11 +171,15 @@ export default defineContentScript({
           verdicts?: Verdict[];
           error?: string;
         };
+        if (generation !== epoch || ctx.isInvalid) return;
         verdicts = res?.verdicts ?? [];
         if (res?.error) console.warn('[x-anti-slop]', res.error);
       } catch (err) {
         console.warn('[x-anti-slop] classify failed', err);
+        if (generation !== epoch || ctx.isInvalid) return;
       }
+
+      if (generation !== epoch || ctx.isInvalid) return;
 
       const byId = new Map(verdicts.map((v) => [v.id, v]));
       for (const tweet of tweets) {
@@ -176,11 +214,14 @@ export default defineContentScript({
     }
 
     function mask(article: HTMLElement, id: string) {
+      const generation = epoch;
       article.dataset.ctState = 'pending';
       cellOf(article).classList.add('ct-pending');
-      window.setTimeout(() => {
+      ctx.setTimeout(() => {
         // The node may have been recycled for a different post by now; unmasking
-        // then would flash the new post into view mid-check.
+        // then would flash the new post into view mid-check. A settings change
+        // starts a new check on the same id, and this timer must not end it.
+        if (generation !== epoch) return;
         if (article.dataset.ctId !== id) return;
         if (article.dataset.ctState === 'pending') unmask(article);
       }, FAILSAFE_MS);
@@ -216,11 +257,19 @@ export default defineContentScript({
 
       const placeholder = document.createElement('div');
       placeholder.className = 'ct-placeholder';
-      placeholder.innerHTML =
-        '<span class="ct-dot"></span><span class="ct-reason"></span>' +
-        '<button type="button" class="ct-show">Show</button>';
-      placeholder.querySelector('.ct-reason')!.textContent = reason;
-      placeholder.querySelector('.ct-show')!.addEventListener('click', (event) => {
+
+      const dot = document.createElement('span');
+      dot.className = 'ct-dot';
+
+      const reasonEl = document.createElement('span');
+      reasonEl.className = 'ct-reason';
+      reasonEl.textContent = reason;
+
+      const show = document.createElement('button');
+      show.type = 'button';
+      show.className = 'ct-show';
+      show.textContent = 'Show';
+      show.addEventListener('click', (event) => {
         event.stopPropagation();
         event.preventDefault();
         revealed.add(id);
@@ -228,6 +277,8 @@ export default defineContentScript({
         article.dataset.ctState = 'revealed';
         placeholder.remove();
       });
+
+      placeholder.append(dot, reasonEl, show);
       cell.prepend(placeholder);
     }
 
