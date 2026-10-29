@@ -24,6 +24,7 @@ import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/li
 import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import { parseHandleList } from '@/lib/prefilter';
 import { REPEAT_THRESHOLD_MAX, REPEAT_THRESHOLD_MIN } from '@/lib/repeat';
+import CardAppearance from './CardAppearance';
 import CustomFilters from './CustomFilters';
 import { OptionsTabs } from './OptionsTabs';
 import RepeatAccounts from './RepeatAccounts';
@@ -439,6 +440,7 @@ export default function App() {
             overlay header to do the same.
           </p>
         </div>
+        <CardAppearance cards={settings.cards} onChange={(cards) => update({ cards })} />
       </section>
       </div>
 

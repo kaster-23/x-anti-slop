@@ -3,11 +3,19 @@
  * Saves from before a field existed pick up the default for that field.
  * The storage item stays `local:settings`; nothing here renames a key.
  */
+import { normalizeCardAppearance, type CardAppearance, type CardTagId } from './card-style';
 import { DEFAULT_SETTINGS, clampThreshold } from './defaults';
 import { SLOP_CATEGORIES, resolveWeights } from './detect/score';
 import { resolvePresetSelection } from './presets';
 import { clampRepeatThreshold } from './repeat';
 import type { HideMode, Settings } from './types';
+
+/** Storage from an older version can omit a tag color or the whole card block. */
+type StoredSettings = Omit<Partial<Settings>, 'cards'> & {
+  cards?: Partial<Omit<CardAppearance, 'colors'>> & {
+    colors?: Partial<Record<CardTagId, string>>;
+  };
+};
 
 function isHideMode(value: unknown): value is HideMode {
   return value === 'collapse' || value === 'blur' || value === 'remove';
@@ -23,7 +31,7 @@ function mergeSignal(
   };
 }
 
-export function coerceSettings(stored: Partial<Settings> | null | undefined): Settings {
+export function coerceSettings(stored: StoredSettings | null | undefined): Settings {
   const source = stored ?? {};
   const merged: Settings = {
     ...DEFAULT_SETTINGS,
@@ -46,6 +54,7 @@ export function coerceSettings(stored: Partial<Settings> | null | undefined): Se
     slopCategories: { ...DEFAULT_SETTINGS.slopCategories },
     slopWeights: source.slopWeights ? resolveWeights(source.slopWeights) : null,
     hideMode: isHideMode(source.hideMode) ? source.hideMode : DEFAULT_SETTINGS.hideMode,
+    cards: normalizeCardAppearance(source.cards),
     replyBotThreshold: clampThreshold(
       source.replyBotThreshold ?? DEFAULT_SETTINGS.replyBotThreshold,
     ),

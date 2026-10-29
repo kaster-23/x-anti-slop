@@ -12,6 +12,10 @@ import {
   distanceToViewport,
   prefetchRootMargin,
 } from '@/lib/viewport';
+import { meterGlassTheme, readFeedTheme } from '@/lib/card-style';
+import { paintFeedCard, restyleFeedCards, setCardAppearance } from './cards';
+import { activeDusts, cancelAllDusts, cancelDust, playDust } from './dust';
+import { hideMotion, isOnScreen } from '@/lib/hide-motion';
 import { mountMeter } from './meter';
 import {
   autoHiddenReason,
@@ -102,6 +106,8 @@ export default defineContentScript({
         clearTimeout(flushTimer);
         flushTimer = undefined;
       }
+      setCardAppearance(settings.cards);
+      meter.setTheme(meterGlassTheme(readFeedTheme(document)));
       resetAll();
       meter.setVisible(meterVisible());
       scan();
@@ -154,6 +160,25 @@ export default defineContentScript({
     let resizeTimer: number | undefined;
     window.addEventListener('resize', onResize);
 
+    let themeTimer: number | undefined;
+    const onTheme = () => {
+      if (!alive() || themeTimer !== undefined) return;
+      themeTimer = ctx.setTimeout(() => {
+        themeTimer = undefined;
+        if (!alive()) return;
+        restyleFeedCards(document);
+        meter.setTheme(meterGlassTheme(readFeedTheme(document)));
+      }, 50);
+    };
+    const themeObserver = new MutationObserver(onTheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+    });
+    if (document.body) {
+      themeObserver.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
+    }
+
     try {
       stopOffenders = await startOffenders({
         alive,
@@ -177,12 +202,14 @@ export default defineContentScript({
     ctx.onInvalidated(() => {
       observer.disconnect();
       io.disconnect();
+      themeObserver.disconnect();
       window.removeEventListener('resize', onResize);
       try {
         browser.runtime.onMessage.removeListener(onMessage);
       } catch (err) {
         reportContentFailure('could not remove settings listener', err, false);
       }
+      cancelAllDusts();
       meter.remove();
       stopOffenders();
     });
@@ -258,6 +285,7 @@ export default defineContentScript({
         // id, so the cell has to be stripped before this post is decided.
         delete article.dataset.ctState;
         delete article.dataset.ctAuthor;
+        delete article.dataset.ctSeen;
         clearCell(cellOf(article));
       }
 
@@ -296,7 +324,7 @@ export default defineContentScript({
       const prior = decided.get(tweet.id);
       if (prior && prior !== 'local') {
         if (article.dataset.ctState !== 'shown' && article.dataset.ctState !== 'revealed') {
-          applyVerdict(article, tweet, prior);
+          applyVerdict(article, tweet, prior, false);
         }
         if (!prior.error) noteModel(prior);
         return;
@@ -324,6 +352,8 @@ export default defineContentScript({
 
       if (settings.hideUntilChecked && article.dataset.ctState !== 'pending') {
         mask(article, tweet.id);
+      } else if (!settings.hideUntilChecked) {
+        notePainted(article);
       }
       outbound.set(tweet.id, { tweet: toInput(tweet), article });
       scheduleFlush();
@@ -396,7 +426,7 @@ export default defineContentScript({
         }
         decided.set(tweet.id, verdict);
         noteModel(verdict);
-        for (const article of articlesFor(tweet.id)) applyVerdict(article, tweet, verdict);
+        for (const article of articlesFor(tweet.id)) applyVerdict(article, tweet, verdict, true);
       }
     }
 
@@ -405,9 +435,14 @@ export default defineContentScript({
       return distanceToViewport(article.getBoundingClientRect(), window.innerHeight);
     }
 
-    function applyVerdict(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
+    function applyVerdict(
+      article: HTMLElement,
+      tweet: TweetInput,
+      verdict: Verdict,
+      allowAnimation: boolean,
+    ) {
       if (verdict.filtered && verdict.reason) {
-        hide(article, tweet, verdict);
+        hide(article, tweet, verdict, allowAnimation);
         noteFlaggedHidden(tweet, settings.repeatThreshold, verdict.reason);
       } else {
         unmask(article);
@@ -445,10 +480,37 @@ export default defineContentScript({
     function unmask(article: HTMLElement) {
       article.dataset.ctState = 'shown';
       cellOf(article).classList.remove('ct-pending');
+      notePainted(article);
+    }
+
+    /** Two frames later the post has actually been painted, if it is still on screen. */
+    function notePainted(article: HTMLElement) {
+      if (article.dataset.ctSeen === '1') return;
+      const view = article.ownerDocument.defaultView;
+      if (!view) return;
+      view.requestAnimationFrame(() => {
+        view.requestAnimationFrame(() => {
+          if (!alive() || !article.isConnected) return;
+          if (article.dataset.ctState === 'hidden' || article.dataset.ctState === 'pending') return;
+          if (!isOnScreen(article.getBoundingClientRect(), { width: view.innerWidth, height: view.innerHeight })) {
+            return;
+          }
+          article.dataset.ctSeen = '1';
+        });
+      });
+    }
+
+    function reducedMotion(): boolean {
+      try {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      } catch {
+        return false;
+      }
     }
 
     /** Strips every trace of a previous verdict from a timeline cell. */
     function clearCell(cell: HTMLElement) {
+      cancelDust(cell);
       cell.classList.remove('ct-pending', 'ct-collapsed', 'ct-blurred', 'ct-removed');
       cell.querySelector('.ct-placeholder')?.remove();
       cell.querySelector('.ct-suggest')?.remove();
@@ -459,7 +521,7 @@ export default defineContentScript({
       for (const article of articlesFor(id)) unmask(article);
     }
 
-    function hide(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
+    function hide(article: HTMLElement, tweet: TweetInput, verdict: Verdict, allowAnimation = false) {
       const id = tweet.id;
       article.dataset.ctState = 'hidden';
       const cell = cellOf(article);
@@ -470,21 +532,24 @@ export default defineContentScript({
         return;
       }
 
-      cell.classList.add(settings.hideMode === 'blur' ? 'ct-blurred' : 'ct-collapsed');
       if (cell.querySelector('.ct-placeholder')) {
+        cell.classList.add(settings.hideMode === 'blur' ? 'ct-blurred' : 'ct-collapsed');
         mountLabels(article, tweet, verdict, settings.labeling);
         return;
       }
 
       const placeholder = document.createElement('div');
       placeholder.className = 'ct-placeholder';
+      const chrome = paintFeedCard(placeholder, verdict.reason ?? '', verdict.botReply === true);
 
-      const dot = document.createElement('span');
-      dot.className = 'ct-dot';
+      const chip = document.createElement('span');
+      chip.className = 'ct-tag';
+      chip.textContent = chrome.chip;
 
       const reasonEl = document.createElement('span');
       reasonEl.className = 'ct-reason';
-      reasonEl.textContent = verdict.reason ?? '';
+      reasonEl.textContent = chrome.detail;
+      reasonEl.hidden = chrome.detail.length === 0;
 
       const show = document.createElement('button');
       show.type = 'button';
@@ -493,6 +558,7 @@ export default defineContentScript({
       show.addEventListener('click', (event) => {
         event.stopPropagation();
         event.preventDefault();
+        cancelDust(cell);
         revealed.add(id);
         cell.classList.remove('ct-collapsed', 'ct-blurred', 'ct-removed');
         article.dataset.ctState = 'revealed';
@@ -500,12 +566,48 @@ export default defineContentScript({
         mountLabels(article, tweet, verdict, settings.labeling);
       });
 
-      placeholder.append(dot, reasonEl, show);
-      cell.prepend(placeholder);
-      mountLabels(article, tweet, verdict, settings.labeling);
+      placeholder.append(chip, reasonEl, show);
+
+      const commit = () => {
+        cell.classList.add(settings.hideMode === 'blur' ? 'ct-blurred' : 'ct-collapsed');
+        if (!placeholder.isConnected) cell.prepend(placeholder);
+        mountLabels(article, tweet, verdict, settings.labeling);
+      };
+
+      const motion = allowAnimation
+        ? hideMotion({
+            mode: settings.cards.hideAnimation,
+            reducedMotion: reducedMotion(),
+            onScreen: isOnScreen(article.getBoundingClientRect(), {
+              width: window.innerWidth,
+              height: window.innerHeight,
+            }),
+            seen: article.dataset.ctSeen === '1',
+            running: activeDusts(),
+          })
+        : { animate: false, particles: false };
+
+      if (!motion.animate) {
+        commit();
+        return;
+      }
+
+      const ink =
+        chrome.colorCoding && chrome.accent
+          ? chrome.accent
+          : getComputedStyle(article).color || '#e7e9ea';
+      playDust({
+        article,
+        cell,
+        particles: motion.particles,
+        collapse: settings.hideMode === 'collapse',
+        color: ink,
+        onDone: commit,
+      });
     }
 
     function resetAll() {
+      cancelAllDusts();
       for (const cell of document.querySelectorAll<HTMLElement>(
         '.ct-pending, .ct-collapsed, .ct-blurred, .ct-removed',
       )) {

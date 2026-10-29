@@ -1,5 +1,6 @@
 /** Free of extension-runtime imports, so build scripts and the eval harness
  *  can use these outside the browser. */
+import { DEFAULT_CARD_APPEARANCE } from './card-style';
 import { djb2 } from './hash';
 import {
   DEFAULT_REPLY_BOT_THRESHOLD,
@@ -40,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
 
   hidePromoted: true,
   hideMode: 'collapse',
+  cards: DEFAULT_CARD_APPEARANCE,
   hideUntilChecked: false,
   allowlist: [],
   blocklist: [],

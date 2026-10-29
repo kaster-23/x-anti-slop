@@ -249,6 +249,35 @@ body {
   min-height: 64px;
 }
 
+.tag-colors {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-color {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.tag-color label {
+  font-size: 13px;
+}
+
+.tag-color input[type='color'] {
+  width: 36px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tag-color .text-btn {
+  justify-self: end;
+}
+
 .two-up {
   display: grid;
   grid-template-columns: 1fr 1fr;

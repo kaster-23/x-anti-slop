@@ -1,5 +1,6 @@
 import { formatCost } from '@/lib/provider';
 import { reportContentFailure, runContentTask } from '@/lib/extension-context';
+import { meterGlassTheme, readFeedTheme } from '@/lib/card-style';
 import {
   DEFAULT_OVERLAY_PLACEMENT,
   dragOverlayPosition,
@@ -24,6 +25,7 @@ export interface MeterCounts {
 export interface Meter {
   update(counts: MeterCounts): void;
   setVisible(visible: boolean): void;
+  setTheme(theme: 'light' | 'dark'): void;
   remove(): void;
 }
 
@@ -86,8 +88,9 @@ export function mountMeter(doc: Document, hooks: MeterHooks): Meter {
   if (cost.parentElement) cost.parentElement.hidden = true;
 
   root.append(header, body);
-  // On body, so color inherits X's page text instead of the OS canvas color.
   (doc.body ?? doc.documentElement).append(root);
+  root.dataset.ctTheme = meterGlassTheme(readFeedTheme(doc));
+  liftMeter(root);
 
   let placement: OverlayPlacement = { ...DEFAULT_OVERLAY_PLACEMENT };
   let latest: MeterCounts = { checked: 0, hidden: 0, settledLocally: 0, cost: 0 };
@@ -300,7 +303,15 @@ export function mountMeter(doc: Document, hooks: MeterHooks): Meter {
     },
     setVisible(visible) {
       root.hidden = !visible;
-      if (visible) paint(false);
+      if (visible) {
+        showMeter(root);
+        paint(false);
+      } else {
+        hideMeter(root);
+      }
+    },
+    setTheme(theme) {
+      root.dataset.ctTheme = theme;
     },
     remove() {
       view?.removeEventListener('resize', onResize);
@@ -314,9 +325,45 @@ export function mountMeter(doc: Document, hooks: MeterHooks): Meter {
       } catch (err) {
         reportContentFailure('could not stop overlay watch', err, hooks.alive());
       }
+      hideMeter(root);
       root.remove();
     },
   };
+}
+
+type PopoverHost = HTMLElement & {
+  showPopover?: () => void;
+  hidePopover?: () => void;
+};
+
+/** Top layer when the browser has manual popovers. The max z-index remains either way. */
+function liftMeter(root: HTMLElement): void {
+  root.style.zIndex = '2147483647';
+  const host = root as PopoverHost;
+  if (typeof host.showPopover !== 'function') return;
+  root.setAttribute('popover', 'manual');
+  showMeter(root);
+}
+
+function showMeter(root: HTMLElement): void {
+  const host = root as PopoverHost;
+  if (typeof host.showPopover !== 'function' || root.getAttribute('popover') !== 'manual') return;
+  if (root.matches(':popover-open')) return;
+  try {
+    host.showPopover();
+  } catch {
+    /* Already open, or the top layer was refused. The z-index still covers the page. */
+  }
+}
+
+function hideMeter(root: HTMLElement): void {
+  const host = root as PopoverHost;
+  if (typeof host.hidePopover !== 'function' || !root.matches(':popover-open')) return;
+  try {
+    host.hidePopover();
+  } catch {
+    /* Closing a closed popover is not a failure. */
+  }
 }
 
 function addRow(doc: Document, parent: HTMLElement, label: string): HTMLElement {

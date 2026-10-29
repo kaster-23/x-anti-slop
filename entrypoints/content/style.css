@@ -9,6 +9,18 @@
   display: none !important;
 }
 
+.ct-dust {
+  position: fixed;
+  inset: auto;
+  z-index: 2147483646;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  pointer-events: none;
+}
+
 .ct-collapsed article {
   display: none !important;
 }
@@ -19,34 +31,95 @@
   user-select: none;
 }
 
-.ct-placeholder {
+.ct-placeholder,
+.ct-suggest {
+  --ct-card-bg: #1a1a1a;
+  --ct-card-text: #f4f4f4;
+  --ct-card-line: #3a3a3a;
+  --ct-card-size: 15px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  font: 400 13px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: inherit;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-  background: transparent;
+  margin: 8px 12px;
+  padding: 12px 12px 12px 10px;
+  border: 1px solid var(--ct-card-line);
+  border-left: 3px solid var(--ct-accent, var(--ct-card-line));
+  background: var(--ct-card-bg);
+  color: var(--ct-card-text);
+  font: 500 var(--ct-card-size)/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.ct-card[data-ct-theme="light"] {
+  --ct-card-bg: #f3f3f3;
+  --ct-card-text: #111111;
+  --ct-card-line: #c6c6c6;
+}
+
+.ct-card[data-ct-theme="dim"] {
+  --ct-card-bg: #243140;
+  --ct-card-text: #f2f5f7;
+  --ct-card-line: #3d5266;
+}
+
+.ct-card[data-ct-theme="dark"] {
+  --ct-card-bg: #1a1a1a;
+  --ct-card-text: #f4f4f4;
+  --ct-card-line: #3a3a3a;
+}
+
+.ct-card[data-ct-style="subtle"] {
+  --ct-card-bg: #101010;
+}
+
+.ct-card[data-ct-style="subtle"][data-ct-theme="light"] {
+  --ct-card-bg: #ffffff;
+}
+
+.ct-card[data-ct-style="subtle"][data-ct-theme="dim"] {
+  --ct-card-bg: #1a2733;
+}
+
+.ct-card[data-ct-size="small"] {
+  --ct-card-size: 13px;
+}
+
+.ct-card[data-ct-size="medium"] {
+  --ct-card-size: 15px;
+}
+
+.ct-card[data-ct-size="large"] {
+  --ct-card-size: 17px;
 }
 
 .ct-blurred .ct-placeholder {
   position: absolute;
   z-index: 2;
   inset: 0 0 auto 0;
+  margin: 0;
   justify-content: center;
-  border-bottom: none;
 }
 
 .ct-blurred {
   position: relative;
 }
 
-.ct-dot {
-  width: 5px;
-  height: 5px;
+.ct-tag {
   flex: none;
-  background: currentColor;
+  padding: 2px 6px;
+  border: 1px solid var(--ct-accent, var(--ct-card-line));
+  background: transparent;
+  color: var(--ct-card-text);
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.ct-card[data-ct-color="on"][data-ct-style="solid"] .ct-tag {
+  border-color: var(--ct-accent, var(--ct-card-line));
+  background: var(--ct-accent, transparent);
+  color: var(--ct-chip-ink, var(--ct-card-text));
 }
 
 .ct-reason {
@@ -96,16 +169,7 @@
 }
 
 .ct-suggest {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  padding: 10px 16px;
-  font: 400 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: inherit;
-  background: transparent;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .ct-suggest-copy,
@@ -154,20 +218,48 @@
 
 .ct-meter {
   position: fixed;
-  z-index: 2147483000;
-  /* Bottom-left until the script measures. The bottom-right is X's Grok and Messages buttons. */
-  left: 16px;
-  bottom: 16px;
+  /* Above X's dialogs when the top layer is unavailable. Popover lifts it further. */
+  z-index: 2147483647;
+  inset: auto auto 16px 16px;
   box-sizing: border-box;
   width: 176px;
+  height: auto;
+  margin: 0;
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 2px;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-  color: inherit;
+  /* Opaque fallback. The frosted fill replaces it where backdrop-filter exists. */
+  background: #0a0a0a;
+  color: #f5f5f5;
   font: 12px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
   user-select: none;
   touch-action: none;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ct-meter {
+    background: rgba(0, 0, 0, 0.72);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+  }
+
+  .ct-meter[data-ct-theme="light"] {
+    background: rgba(255, 255, 255, 0.78);
+  }
+}
+
+.ct-meter[data-ct-theme="light"] {
+  border-color: rgba(0, 0, 0, 0.16);
+  background: #ffffff;
+  color: #111111;
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .ct-meter[data-ct-theme="light"] {
+    background: rgba(255, 255, 255, 0.78);
+  }
 }
 
 .ct-meter[hidden] {
