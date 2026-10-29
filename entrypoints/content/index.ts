@@ -83,6 +83,15 @@ export default defineContentScript({
 
     browser.runtime.onMessage.addListener(onMessage);
 
+    try {
+      const storedLabels = (await browser.runtime.sendMessage({ type: 'getLabels' })) as {
+        labels?: Record<string, 0 | 1>;
+      };
+      for (const [id, label] of Object.entries(storedLabels?.labels ?? {})) labeled.set(id, label);
+    } catch {
+      // The worker is restarting. Marks still save on the next click.
+    }
+
     const observer = new MutationObserver(() => scheduleScan());
     const root = document.body ?? document.documentElement;
     observer.observe(root, { childList: true, subtree: true });
@@ -166,7 +175,7 @@ export default defineContentScript({
       const autoReason = autoHiddenReason(tweet.author);
       if (autoReason) {
         decided.set(tweet.id, 'local');
-        hide(article, tweet.id, autoReason);
+        hide(article, tweet, { id: tweet.id, scores: {}, filtered: true, reason: autoReason });
         return;
       }
       mountAccountSuggestion(article, tweet.author, settings.repeatThreshold);
@@ -182,7 +191,7 @@ export default defineContentScript({
       const local = localVerdict(tweet, settings);
       if (local) {
         decided.set(tweet.id, 'local');
-        hide(article, tweet.id, local);
+        hide(article, tweet, { id: tweet.id, scores: {}, filtered: true, reason: local });
         noteFlaggedHidden(tweet, settings.repeatThreshold, local);
         return;
       }
@@ -246,9 +255,12 @@ export default defineContentScript({
 
     function applyVerdict(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
       if (verdict.filtered && verdict.reason) {
-        hide(article, tweet.id, verdict.reason);
+        hide(article, tweet, verdict);
         noteFlaggedHidden(tweet, settings.repeatThreshold, verdict.reason);
-      } else unmask(article);
+      } else {
+        unmask(article);
+        mountLabels(article, tweet, verdict, settings.labeling);
+      }
     }
 
     /** The timeline cell wrapping a post; hiding this removes the gap too. */
@@ -288,13 +300,15 @@ export default defineContentScript({
       cell.classList.remove('ct-pending', 'ct-collapsed', 'ct-blurred', 'ct-removed');
       cell.querySelector('.ct-placeholder')?.remove();
       cell.querySelector('.ct-suggest')?.remove();
+      cell.querySelector('.ct-labelbar')?.remove();
     }
 
     function unmaskById(id: string) {
       for (const article of articlesFor(id)) unmask(article);
     }
 
-    function hide(article: HTMLElement, id: string, reason: string) {
+    function hide(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
+      const id = tweet.id;
       article.dataset.ctState = 'hidden';
       const cell = cellOf(article);
       cell.classList.remove('ct-pending');
@@ -305,7 +319,10 @@ export default defineContentScript({
       }
 
       cell.classList.add(settings.hideMode === 'blur' ? 'ct-blurred' : 'ct-collapsed');
-      if (cell.querySelector('.ct-placeholder')) return;
+      if (cell.querySelector('.ct-placeholder')) {
+        mountLabels(article, tweet, verdict, settings.labeling);
+        return;
+      }
 
       const placeholder = document.createElement('div');
       placeholder.className = 'ct-placeholder';
@@ -315,7 +332,7 @@ export default defineContentScript({
 
       const reasonEl = document.createElement('span');
       reasonEl.className = 'ct-reason';
-      reasonEl.textContent = reason;
+      reasonEl.textContent = verdict.reason ?? '';
 
       const show = document.createElement('button');
       show.type = 'button';
@@ -328,10 +345,12 @@ export default defineContentScript({
         cell.classList.remove('ct-collapsed', 'ct-blurred', 'ct-removed');
         article.dataset.ctState = 'revealed';
         placeholder.remove();
+        mountLabels(article, tweet, verdict, settings.labeling);
       });
 
       placeholder.append(dot, reasonEl, show);
       cell.prepend(placeholder);
+      mountLabels(article, tweet, verdict, settings.labeling);
     }
 
     function resetAll() {
@@ -340,7 +359,9 @@ export default defineContentScript({
       )) {
         clearCell(cell);
       }
-      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest')) node.remove();
+      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest, .ct-labelbar')) {
+        node.remove();
+      }
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
         delete article.dataset.ctState;
         delete article.dataset.ctAuthor;
@@ -348,6 +369,61 @@ export default defineContentScript({
     }
   },
 });
+
+const labeled = new Map<string, 0 | 1>();
+
+function mountLabels(article: HTMLElement, tweet: TweetInput, verdict: Verdict, enabled: boolean) {
+  const cell = article.closest<HTMLElement>('[data-testid="cellInnerDiv"]') ?? article;
+  cell.querySelector('.ct-labelbar')?.remove();
+  cell.querySelector('.ct-placeholder .ct-labels')?.remove();
+  if (!enabled || !verdict.features) return;
+
+  const bar = document.createElement('span');
+  bar.className = 'ct-labels';
+  const prompt = document.createElement('span');
+  prompt.className = 'ct-label-prompt';
+  prompt.textContent = 'Mark';
+  bar.append(prompt);
+  for (const [label, text] of [
+    [1, 'AI'],
+    [0, 'Human'],
+  ] as const) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ct-label';
+    button.textContent = text;
+    button.setAttribute('aria-pressed', String(labeled.get(tweet.id) === label));
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      labeled.set(tweet.id, label);
+      for (const sibling of bar.querySelectorAll<HTMLButtonElement>('.ct-label')) {
+        sibling.setAttribute('aria-pressed', String(sibling === button));
+      }
+      browser.runtime
+        .sendMessage({
+          type: 'labelPost',
+          id: tweet.id,
+          label,
+          features: verdict.features,
+          text: tweet.text,
+          author: tweet.author,
+        })
+        .catch(() => {});
+    });
+    bar.append(button);
+  }
+
+  const placeholder = cell.querySelector('.ct-placeholder');
+  if (placeholder) {
+    placeholder.append(bar);
+    return;
+  }
+  const row = document.createElement('div');
+  row.className = 'ct-labelbar';
+  row.append(bar);
+  cell.append(row);
+}
 
 /** Settings and key presence from the background worker. The key itself is never included. */
 async function loadTimeline(): Promise<{ settings: Settings; hasKey: boolean }> {
@@ -375,6 +451,7 @@ function toInput(t: Extracted): TweetInput {
     hasVideo: t.hasVideo,
     isReply: t.isReply,
     isQuote: t.isQuote,
+    parentText: t.parentText,
   };
 }
 

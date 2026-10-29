@@ -7,11 +7,13 @@ import {
   hidingMatch,
   readScores,
   resolveModel,
+  toSlopPost,
 } from './provider';
 import { questionSignature } from './signature';
 import { redactSecrets } from './redact';
-import { activeKey } from './defaults';
+import { activeKey, slopThresholdsOf } from './defaults';
 import { EMPTY_STATS, statsStore } from './settings';
+import { featureVector, judgeSlop, resolveWeights, slopExceeds, type SlopCategory } from './detect/score';
 import type { Settings, Stats, TweetInput, Verdict } from './types';
 
 
@@ -22,7 +24,11 @@ const CACHE_LIMIT = 5000;
 interface CacheEntry {
   scores: Record<string, number>;
   quality?: number;
-  /** The question set that produced this; changing filters invalidates it. */
+  categoryScores?: Partial<Record<SlopCategory, number>>;
+  humanVeto?: boolean;
+  botReply?: boolean;
+  features?: Record<string, number>;
+  /** Question set, weights, and thresholds that produced this. A mismatch re-checks. */
   sig: string;
   at: number;
 }
@@ -82,10 +88,40 @@ export async function clearCache() {
 }
 
 function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
-  const verdict: Verdict = { id, scores: entry.scores, quality: entry.quality, filtered: false };
+  const verdict: Verdict = {
+    id,
+    scores: entry.scores,
+    quality: entry.quality,
+    features: entry.features,
+    categoryScores: entry.categoryScores,
+    humanVeto: entry.humanVeto,
+    botReply: entry.botReply,
+    filtered: false,
+  };
 
-  // Slop hides on ai_slop or ad. The strongest match becomes the reason.
-  const best = hidingMatch(entry.scores, settings);
+  // Ads and rage bait use their own bars. A high ad score also hides when slop
+  // is on. The style score adds category bars and the lower reply-bot bar.
+  let best = hidingMatch(entry.scores, settings);
+  if (settings.signals.slop.enabled) {
+    const hit = slopExceeds(
+      {
+        score: entry.scores.slop ?? 0,
+        categories: {
+          assistant: 0,
+          profundity: 0,
+          cadence: 0,
+          circumvention: 0,
+          vocabulary: 0,
+          templates: 0,
+          ...entry.categoryScores,
+        },
+        humanVeto: entry.humanVeto === true,
+        botReply: entry.botReply === true,
+      },
+      slopThresholdsOf(settings),
+    );
+    if (hit && (!best || hit.score > best.score)) best = { label: 'AI slop', score: hit.score };
+  }
 
   if (best) {
     verdict.filtered = true;
@@ -235,13 +271,9 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Jev evaluates every question against a single `state`, so posts are classified
- * one request at a time rather than batched — batching several posts into one
- * state makes the questions ambiguous about which post they refer to.
- *
- * Returns the score entry, not a verdict. Callers apply `decide` with the
- * settings they were asked to use, so a threshold change that shares this
- * request does not keep the thresholds from when the request started.
+ * One post, one request. The style bank rides in that same call. A 30-question
+ * request has the same warm latency as a 3-question one, so the questions are
+ * not split. Returns the score entry, not a verdict.
  */
 async function fetchEntry(
   tweet: TweetInput,
@@ -250,7 +282,8 @@ async function fetchEntry(
   seq: number,
   epoch: number,
 ): Promise<CacheEntry> {
-  const questions = buildQuestions(settings);
+  const post = toSlopPost(tweet);
+  const questions = buildQuestions(settings, post);
   const res = await withSlot(() =>
     callSystemOne({
       provider: settings.provider,
@@ -263,6 +296,22 @@ async function fetchEntry(
 
   const read = readScores(res.answers);
   const entry: CacheEntry = { scores: read.scores, quality: read.quality, sig, at: Date.now() };
+
+  if (settings.signals.slop.enabled) {
+    const weights = resolveWeights(settings.slopWeights);
+    const styleAnswers: Record<string, { type: 'noul'; noul: number } | { type: 'score'; score: number }> = {};
+    for (const [key, answer] of Object.entries(res.answers)) {
+      if (answer.type === 'noul') styleAnswers[key] = { type: 'noul', noul: answer.noul };
+      else if (answer.type === 'score') styleAnswers[key] = { type: 'score', score: answer.score };
+    }
+    const features = featureVector(styleAnswers, post);
+    const judged = judgeSlop(features, weights, post, slopThresholdsOf(settings));
+    entry.scores.slop = judged.score;
+    entry.categoryScores = judged.categories;
+    entry.humanVeto = judged.humanVeto;
+    entry.botReply = judged.botReply;
+    entry.features = features;
+  }
 
   // A clear, or a newer question set for this post, wins over a response that
   // was already in flight.

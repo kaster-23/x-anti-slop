@@ -25,20 +25,24 @@ function filter(fields: Partial<CustomFilter> = {}): CustomFilter {
 }
 
 describe('questionSignature', () => {
-  test('ignores threshold and label edits', () => {
+  test('ignores a label edit and misses when a threshold changes', () => {
     const base = questionSignature(withSettings({
       customFilters: [filter()],
       minQuality: 1,
     }));
-    const edited = questionSignature(withSettings({
-      customFilters: [filter({ label: 'Tokens', threshold: 0.9 })],
-      minQuality: 2,
+    const relabeled = questionSignature(withSettings({
+      customFilters: [filter({ label: 'Tokens' })],
+      minQuality: 1,
+    }));
+    expect(relabeled).toBe(base);
+    expect(questionSignature(withSettings({
+      customFilters: [filter()],
+      minQuality: 1,
       signals: {
         ...DEFAULT_SETTINGS.signals,
         slop: { enabled: true, threshold: 0.95 },
       },
-    }));
-    expect(edited).toBe(base);
+    }))).not.toBe(base);
   });
 
   test('changes when the question set changes', () => {

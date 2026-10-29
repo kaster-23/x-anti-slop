@@ -11,9 +11,11 @@ failure leaves the post visible.
 
 The extension code is imported from
 [midplane/clean-twitter](https://github.com/midplane/clean-twitter) (MIT,
-Copyright (c) 2026 Nikhil Bafna). See [NOTICE](NOTICE) for credits, including
-[adamnroman/slop-filter](https://github.com/adamnroman/slop-filter), whose
-detection approach is planned for a later port and is not in this tree yet.
+Copyright (c) 2026 Nikhil Bafna). AI-slop detection is ported from
+[adamnroman/slop-filter](https://github.com/adamnroman/slop-filter) (MIT,
+Copyright (c) 2026 Adam Roman): about thirty writing-style questions in one
+Jev call per post, local counts, and weights you can fit from your own marks.
+See [NOTICE](NOTICE). There is no hosted scoring backend.
 
 ## Install unpacked
 
@@ -57,9 +59,18 @@ itself.
 | TypeSafe (direct) | `https://api.typesafe.ai/v1/systemone` | `jev-1.14.0` | [console.typesafe.ai](https://console.typesafe.ai/settings/keys) |
 | OpenRouter | `https://openrouter.ai/api/alpha/decisions` | `typesafe/jev-1.14` | [openrouter.ai/keys](https://openrouter.ai/keys) |
 
-Both routes take the same `{ model, state, questions }` body. Jev on OpenRouter
-is a decisions model: it is served from `/api/alpha/decisions` and rejected by
-`/api/v1/chat/completions`.
+Both routes take `{ model, state, questions }`. `state` is the tweet text (a
+string, or one object that holds that text). Each question is
+`{ type, instructions, criteria }`. Noul criteria are `{ true, false }` and the
+answer is a probability with no confidence field. Choice criteria are
+`{ option: description }`. Score criteria are an ordered list of at most 10
+levels; an 11th is rejected. The style bank is about 30 questions sent in that
+one request per post: a 30-question call has the same warm latency as a
+3-question call (about 80–125 ms) at about twice the tokens (about 1,070 input
+tokens).
+
+Jev on OpenRouter is a decisions model: it is served from
+`/api/alpha/decisions` and rejected by `/api/v1/chat/completions`.
 
 Leave the model field blank to use the default. The defaults are the current
 versioned ids from the TypeSafe models page and the OpenRouter Jev guide
@@ -86,7 +97,7 @@ policy is in [PRIVACY.md](PRIVACY.md).
 
 **Model-backed**, each with its own confidence threshold:
 
-- **AI slop** — thread-bait, hollow platitudes, listicles of truisms, machine-written filler
+- **AI slop** — one Jev request asks ~30 narrow questions about how the post is written (not what it means). Local code counts em dashes, stock AI vocabulary, and templated structures. A weighted score combines them. Each writing-style bucket also has its own threshold, and a bot-style reply inside a thread uses a lower one. Mark a post AI or Human on the timeline; the options page fits the weights from those marks and stores them locally.
 - **Rage bait** — engineered outrage and dunks
 - **Ads and shilling** — sales pitches, affiliate spam, crypto promos
 - **Your own yes/no questions**, written on the options page
@@ -118,22 +129,25 @@ pnpm build:firefox
 `pnpm dev` does not launch a browser. Load `.output/chrome-mv3-dev` unpacked in
 a Chrome profile that is already signed in to X.
 
-`pnpm eval` scores a small labelled set of posts against the live API. It needs
-your own key and is not part of CI:
+`pnpm eval` compares the style scorer with the clean-twitter baseline (one
+broad slop question) on a small labelled set. With no `TYPESAFE_API_KEY` it
+uses recorded answers and says so. CI runs that path. One post per request
+when the key is set:
 
 ```bash
+pnpm eval
 TYPESAFE_API_KEY=… pnpm eval
-PROVIDER=openrouter OPENROUTER_API_KEY=… pnpm eval
 ```
 
 ## Layout
 
 ```
-lib/provider.ts    TypeSafe and OpenRouter calls, questions, retry
-lib/classifier.ts  verdict cache, concurrency, thresholds
-lib/extract.ts     reading posts out of X's DOM
-lib/repeat.ts      flagged-account counts and local auto-hide
-lib/settings.ts    extension local storage
+lib/provider.ts       TypeSafe and OpenRouter calls, retry
+lib/detect/           style questions, local counts, score, label fitting
+lib/classifier.ts     verdict cache, concurrency, thresholds
+lib/extract.ts        reading posts out of X's DOM
+lib/repeat.ts         flagged-account counts and local auto-hide
+lib/settings.ts       extension local storage
 entrypoints/
   background.ts    holds the key and is the only caller of the API
   content/         watches the timeline and applies verdicts
@@ -143,4 +157,6 @@ entrypoints/
 
 ## License
 
-[MIT](LICENSE). Copyright (c) 2026 Nikhil Bafna. Credits: [NOTICE](NOTICE).
+[MIT](LICENSE). Copyright (c) 2026 Nikhil Bafna. Ported detection code:
+Copyright (c) 2026 Adam Roman and Copyright (c) 2026 wilu222. Credits:
+[NOTICE](NOTICE).
