@@ -30,6 +30,7 @@ worker sends the following fields for that post to your selected provider:
 | `quoted_post` | The text of a quoted post, when there is one |
 | `attachments` | Whether the post carries an image and/or a video |
 | `is_reply` | Whether the post is a reply |
+| `parent` | The text of the post being replied to, when that post is on the page |
 
 Alongside these it sends the filter questions themselves and your API key, used
 as a bearer token so the provider can authenticate and bill you.
@@ -43,8 +44,9 @@ Nothing else is transmitted. In particular the extension does **not** send:
 - **Your identity.** No account, no email address, no login, no device or
   browser identifier, and no X/Twitter session data or cookies.
 - **Your browsing history**, or any page other than posts on an X timeline.
-- **Posts it has already judged.** Results are cached, so a given post is sent
-  at most once.
+- **Posts it has already judged.** Results are cached by post id. A post is
+  sent again only when the questions, the fitted weights, or a threshold
+  change, because those are part of the cache key.
 
 ## Where it is sent
 
@@ -67,11 +69,14 @@ anywhere except the post fields and API key described above, and none of it is
 accessible to the developer.
 
 - **Your settings**, including your API key and any filters you have written
-- **A cache of past results** — post identifiers and the resulting scores,
-  capped at 5,000 entries, so the same post is never sent twice
+- **A cache of past results** — post identifiers, scores, and the style
+  features that produced them, capped at 5,000 entries. The same post is not
+  sent again until the questions, weights, or a threshold change
 - **Counters** — how many posts have been checked and filtered, and the
   resulting token spend
 - **The most recent API error**, so a failure can be shown in the popup
+- **Marks you set** (AI or Human), with the post text and the feature scores
+  used to fit weights. Those stay on this device. Fitting runs locally.
 
 Your API key is stored locally, is never logged, and is sent only to the
 provider you selected, and only by the background worker. Uninstalling the

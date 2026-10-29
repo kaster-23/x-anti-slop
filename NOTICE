@@ -30,8 +30,23 @@ Copyright (c) 2026 Adam Roman
 
 Licensed under the MIT License.
 
-slop-filter is credited here because a later change (FRA-54) will port its
-detection approach: a set of style questions, local counts, and label-fitted
-weights. No source code from that repository is included in this bootstrap.
-When that port lands, the MIT copyright notice for Adam Roman must travel
-with the ported code.
+The writing-style questions, the weighted score, the hard rules, the human
+veto, the stock-vocabulary tiers, and the label fitter in `lib/detect/` are
+ported from slop-filter. The MIT copyright notice and permission notice for
+that code are in LICENSE-third-party and in the ported files.
+
+This port does not include slop-filter's paid "Use mine" backend.
+
+unpolish-ai-writing
+-------------------
+
+https://github.com/wilu222/unpolish-ai-writing
+
+Copyright (c) 2026 wilu222
+
+Licensed under the MIT License. See LICENSE-third-party.
+
+slop-filter adapted this skill's tell list and word tables. Those tables are
+in `lib/detect/stylometry.ts` and the question wording in
+`lib/detect/questions.ts`. The skill removes the tells from text. This
+extension uses them to spot the tells.

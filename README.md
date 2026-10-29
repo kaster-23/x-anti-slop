@@ -11,9 +11,11 @@ failure leaves the post visible.
 
 The extension code is imported from
 [midplane/clean-twitter](https://github.com/midplane/clean-twitter) (MIT,
-Copyright (c) 2026 Nikhil Bafna). See [NOTICE](NOTICE) for credits, including
-[adamnroman/slop-filter](https://github.com/adamnroman/slop-filter), whose
-detection approach is planned for a later port and is not in this tree yet.
+Copyright (c) 2026 Nikhil Bafna). AI-slop detection is ported from
+[adamnroman/slop-filter](https://github.com/adamnroman/slop-filter) (MIT,
+Copyright (c) 2026 Adam Roman): about thirty writing-style questions in one
+Jev call per post, local counts, and weights you can fit from your own marks.
+See [NOTICE](NOTICE). There is no hosted scoring backend.
 
 ## Install unpacked
 
@@ -85,7 +87,7 @@ policy is in [PRIVACY.md](PRIVACY.md).
 
 **Model-backed**, each with its own confidence threshold:
 
-- **AI slop** — thread-bait, hollow platitudes, listicles of truisms, machine-written filler
+- **AI slop** — one Jev request asks ~30 narrow questions about how the post is written (not what it means). Local code counts em dashes, stock AI vocabulary, and templated structures. A weighted score combines them. Each writing-style bucket also has its own threshold, and a bot-style reply inside a thread uses a lower one. Mark a post AI or Human on the timeline; the options page fits the weights from those marks and stores them locally.
 - **Rage bait** — engineered outrage and dunks
 - **Ads and shilling** — sales pitches, affiliate spam, crypto promos
 - **Your own yes/no questions**, written on the options page
@@ -108,10 +110,13 @@ pnpm build:firefox
 `pnpm dev` does not launch a browser. Load `.output/chrome-mv3-dev` unpacked in
 a Chrome profile that is already signed in to X.
 
-`pnpm eval` scores a small labelled set of posts against the live API. It needs
-your own key and is not part of CI:
+`pnpm eval` compares the style scorer with the clean-twitter baseline (one
+broad slop question) on a small labelled set. With a key it calls Jev, one
+post per request. With no key it uses recorded answers and says so. CI runs
+that recorded path:
 
 ```bash
+pnpm eval
 TYPESAFE_API_KEY=… pnpm eval
 PROVIDER=openrouter OPENROUTER_API_KEY=… pnpm eval
 ```
@@ -119,10 +124,11 @@ PROVIDER=openrouter OPENROUTER_API_KEY=… pnpm eval
 ## Layout
 
 ```
-lib/provider.ts    TypeSafe and OpenRouter calls, questions, retry
-lib/classifier.ts  verdict cache, concurrency, thresholds
-lib/extract.ts     reading posts out of X's DOM
-lib/settings.ts    extension local storage
+lib/provider.ts       TypeSafe and OpenRouter calls, retry
+lib/detect/           style questions, local counts, score, label fitting
+lib/classifier.ts     verdict cache, concurrency, thresholds
+lib/extract.ts        reading posts out of X's DOM
+lib/settings.ts       extension local storage
 entrypoints/
   background.ts    holds the key and is the only caller of the API
   content/         watches the timeline and applies verdicts
@@ -132,4 +138,6 @@ entrypoints/
 
 ## License
 
-[MIT](LICENSE). Copyright (c) 2026 Nikhil Bafna. Credits: [NOTICE](NOTICE).
+[MIT](LICENSE). Copyright (c) 2026 Nikhil Bafna. Ported detection code:
+Copyright (c) 2026 Adam Roman and Copyright (c) 2026 wilu222. Credits:
+[NOTICE](NOTICE).

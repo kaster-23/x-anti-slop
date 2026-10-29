@@ -1,4 +1,5 @@
 import { isUsable } from './defaults';
+import { buildStyleQuestions, type SlopPost } from './detect/questions';
 import type { CustomFilter, ProviderId, SignalId, Settings, TweetInput } from './types';
 
 /**
@@ -61,20 +62,36 @@ type NoulQuestion = {
   criteria?: { true: string; false: string };
 };
 type ScoreQuestion = { type: 'score'; instructions: string; criteria: string[] };
-type Question = NoulQuestion | ScoreQuestion;
+/**
+ * Unordered options. Documented at https://docs.typesafe.ai/primitives/choice.
+ * The style bank does not use it: those tells are yes/no (noul) or an ordered
+ * rhythm (score). Kept so a later question can send the type the docs describe.
+ */
+type ChoiceQuestion = {
+  type: 'choice';
+  instructions: string;
+  criteria: Record<string, string>;
+};
+type Question = NoulQuestion | ScoreQuestion | ChoiceQuestion;
 
-const SIGNAL_QUESTIONS: Record<SignalId, NoulQuestion> = {
-  slop: {
-    type: 'noul',
-    instructions:
-      "The post is low-effort AI-generated or engagement-farming 'slop': formulaic thread-bait, " +
-      'hollow motivational platitudes, listicles of truisms, engagement-baiting questions, ' +
-      'or text that reads as machine-written filler.',
-    criteria: {
-      true: 'Formulaic engagement bait or machine-written filler with no specific substance',
-      false: 'A genuine post with specific, concrete substance, however casual',
-    },
+/**
+ * The single broad slop question this extension used before the style bank.
+ * The eval harness still asks it, so the new scorer can be compared with the
+ * clean-twitter baseline. The live classifier does not send it.
+ */
+export const BASELINE_SLOP_QUESTION: NoulQuestion = {
+  type: 'noul',
+  instructions:
+    "The post is low-effort AI-generated or engagement-farming 'slop': formulaic thread-bait, " +
+    'hollow motivational platitudes, listicles of truisms, engagement-baiting questions, ' +
+    'or text that reads as machine-written filler.',
+  criteria: {
+    true: 'Formulaic engagement bait or machine-written filler with no specific substance',
+    false: 'A genuine post with specific, concrete substance, however casual',
   },
+};
+
+const SIGNAL_QUESTIONS: Record<Exclude<SignalId, 'slop'>, NoulQuestion> = {
   ragebait: {
     type: 'noul',
     instructions:
@@ -136,10 +153,27 @@ export function activeCustomFilters(settings: Settings): CustomFilter[] {
   return (settings.customFilters ?? []).filter((f) => f.enabled && isUsable(f));
 }
 
-export function buildQuestions(settings: Settings): Record<string, Question> {
+export function toSlopPost(tweet: Pick<TweetInput, 'text' | 'parentText' | 'isReply'>): SlopPost {
+  return { text: tweet.text, parentText: tweet.parentText, isReply: tweet.isReply };
+}
+
+/**
+ * One post, one request. Style questions are added only for that post: a
+ * parent-only question is omitted when this post has no parent, and nothing
+ * here batches several posts into one state.
+ */
+export function buildQuestions(
+  settings: Settings,
+  post: SlopPost = { text: '' },
+): Record<string, Question> {
   const questions: Record<string, Question> = {};
   for (const [id, cfg] of Object.entries(settings.signals)) {
-    if (cfg.enabled) questions[id] = SIGNAL_QUESTIONS[id as SignalId];
+    if (!cfg.enabled || id === 'slop') continue;
+    questions[id] = SIGNAL_QUESTIONS[id as Exclude<SignalId, 'slop'>];
+  }
+  // The slop signal is ~30 narrow style questions, not one broad noul.
+  if (settings.signals.slop.enabled) {
+    Object.assign(questions, buildStyleQuestions(post));
   }
   if (settings.minQuality > 0) questions.quality = QUALITY_QUESTION;
   for (const filter of activeCustomFilters(settings)) {
@@ -148,14 +182,31 @@ export function buildQuestions(settings: Settings): Record<string, Question> {
   return questions;
 }
 
+/** The pre-port question set: one noul each for slop, rage bait, and ads. */
+export function buildBaselineQuestions(settings: Settings): Record<string, Question> {
+  const questions: Record<string, Question> = {};
+  for (const [id, cfg] of Object.entries(settings.signals)) {
+    if (!cfg.enabled) continue;
+    questions[id] = id === 'slop' ? BASELINE_SLOP_QUESTION : SIGNAL_QUESTIONS[id as Exclude<SignalId, 'slop'>];
+  }
+  if (settings.minQuality > 0) questions.quality = QUALITY_QUESTION;
+  return questions;
+}
+
 /** A structured record rather than a blob of text, so the model can tell the
  *  author's own words apart from a quoted post. */
 export function buildState(tweet: TweetInput): Record<string, unknown> {
+  const post: Record<string, unknown> = { text: tweet.text };
   const state: Record<string, unknown> = {
     author_handle: tweet.author,
     author_name: tweet.authorName,
     text: tweet.text,
+    // Style questions name `post.text` (and `parent.text` when a reply's parent
+    // is on the page). The flat fields stay so rage-bait, ads, and custom
+    // filters still read the same state.
+    post,
   };
+  if (tweet.parentText) state.parent = { text: tweet.parentText };
   if (tweet.quotedText) state.quoted_post = tweet.quotedText;
   const attachments = [tweet.hasImage && 'image', tweet.hasVideo && 'video'].filter(Boolean);
   if (attachments.length) state.attachments = attachments.join(', ');
@@ -174,7 +225,13 @@ export interface ScoreAnswer {
   legend: Record<string, string>;
   probabilities: Record<string, number>;
 }
-export type Answer = NoulAnswer | ScoreAnswer;
+export interface ChoiceAnswer {
+  type: 'choice';
+  choice: string;
+  probabilities: Record<string, number>;
+  confidence: number;
+}
+export type Answer = NoulAnswer | ScoreAnswer | ChoiceAnswer;
 
 export interface SystemOneResponse {
   model: string;

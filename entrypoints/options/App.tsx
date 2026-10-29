@@ -3,6 +3,7 @@ import { browser } from '#imports';
 import { loadSettings, saveSettings } from '@/lib/settings';
 import { PROVIDERS } from '@/lib/provider';
 import CustomFilters from './CustomFilters';
+import SlopTuning from './SlopTuning';
 import type { HideMode, ProviderId, Settings, Stats } from '@/lib/types';
 
 const PROVIDER_IDS = Object.keys(PROVIDERS) as ProviderId[];
@@ -140,6 +141,8 @@ export default function App() {
           <div className="sub">Leave blank to use the default.</div>
         </div>
       </section>
+
+      <SlopTuning settings={settings} onChange={update} />
 
       <CustomFilters
         filters={settings.customFilters}

@@ -7,12 +7,21 @@ import {
   costOf,
   customKey,
   resolveModel,
+  toSlopPost,
   type NoulAnswer,
   type ScoreAnswer,
 } from './provider';
 import { djb2 } from './hash';
-import { activeKey } from './defaults';
+import { activeKey, slopThresholdsOf } from './defaults';
 import { EMPTY_STATS, statsStore } from './settings';
+import {
+  featureVector,
+  judgeSlop,
+  resolveWeights,
+  scoringFingerprint,
+  slopExceeds,
+  type SlopCategory,
+} from './detect/score';
 import type { Settings, SignalId, Stats, TweetInput, Verdict } from './types';
 
 const SIGNAL_LABELS: Record<SignalId, string> = {
@@ -28,7 +37,11 @@ const CACHE_LIMIT = 5000;
 interface CacheEntry {
   scores: Record<string, number>;
   quality?: number;
-  /** The question set that produced this; changing filters invalidates it. */
+  categoryScores?: Partial<Record<SlopCategory, number>>;
+  humanVeto?: boolean;
+  botReply?: boolean;
+  features?: Record<string, number>;
+  /** Question set, weights, and thresholds that produced this. A mismatch re-checks. */
   sig: string;
   at: number;
 }
@@ -89,21 +102,63 @@ function questionSignature(settings: Settings): string {
     .map((f) => `${f.id}:${f.instructions}:${f.whenTrue}:${f.whenFalse}`)
     .sort()
     .join('|');
+  const thresholds = Object.entries(settings.signals)
+    .map(([id, cfg]) => `${id}:${cfg.enabled ? 1 : 0}:${cfg.threshold}`)
+    .join(',');
+  const customThresholds = activeCustomFilters(settings)
+    .map((f) => `${f.id}@${f.threshold}`)
+    .sort()
+    .join(',');
+  const weights = resolveWeights(settings.slopWeights);
   return [
     on.join(','),
-    `q${settings.minQuality > 0 ? 1 : 0}`,
+    `q${settings.minQuality}`,
     resolveModel(settings),
     djb2(custom),
+    thresholds,
+    customThresholds,
+    scoringFingerprint(weights, slopThresholdsOf(settings)),
   ].join('|');
 }
 
 function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
-  const verdict: Verdict = { id, scores: entry.scores, quality: entry.quality, filtered: false };
+  const verdict: Verdict = {
+    id,
+    scores: entry.scores,
+    quality: entry.quality,
+    features: entry.features,
+    categoryScores: entry.categoryScores,
+    humanVeto: entry.humanVeto,
+    botReply: entry.botReply,
+    filtered: false,
+  };
 
   // The strongest signal over its threshold becomes the reason shown.
   let best: { label: string; score: number } | null = null;
   for (const [signal, cfg] of Object.entries(settings.signals)) {
     if (!cfg.enabled) continue;
+    if (signal === 'slop') {
+      const hit = slopExceeds(
+        {
+          score: entry.scores.slop ?? 0,
+          categories: {
+            assistant: 0,
+            profundity: 0,
+            cadence: 0,
+            circumvention: 0,
+            vocabulary: 0,
+            templates: 0,
+            ...entry.categoryScores,
+          },
+          humanVeto: entry.humanVeto === true,
+          botReply: entry.botReply === true,
+        },
+        slopThresholdsOf(settings),
+      );
+      if (!hit) continue;
+      if (!best || hit.score > best.score) best = { label: SIGNAL_LABELS.slop, score: hit.score };
+      continue;
+    }
     const score = entry.scores[signal as SignalId];
     if (score === undefined || score < cfg.threshold) continue;
     if (!best || score > best.score) {
@@ -267,7 +322,10 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
  * state makes the questions ambiguous about which post they refer to.
  */
 async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdict> {
-  const questions = buildQuestions(settings);
+  const post = toSlopPost(tweet);
+  // One post per request. Batching posts into one state makes the questions
+  // ambiguous about which post they refer to.
+  const questions = buildQuestions(settings, post);
   if (Object.keys(questions).length === 0) {
     return { id: tweet.id, scores: {}, filtered: false };
   }
@@ -286,9 +344,24 @@ async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdi
   for (const [key, answer] of Object.entries(res.answers)) {
     if (key === 'quality' && answer.type === 'score') {
       entry.quality = (answer as ScoreAnswer).score;
-    } else if (answer.type === 'noul') {
+    } else if (answer.type === 'noul' && (key === 'ragebait' || key === 'ads' || key.startsWith('cf_'))) {
       entry.scores[key] = (answer as NoulAnswer).noul;
     }
+  }
+
+  if (settings.signals.slop.enabled) {
+    const weights = resolveWeights(settings.slopWeights);
+    const styleAnswers: Record<string, NoulAnswer | ScoreAnswer> = {};
+    for (const [key, answer] of Object.entries(res.answers)) {
+      if (answer.type === 'noul' || answer.type === 'score') styleAnswers[key] = answer;
+    }
+    const features = featureVector(styleAnswers, post);
+    const judged = judgeSlop(features, weights, post, slopThresholdsOf(settings));
+    entry.scores.slop = judged.score;
+    entry.categoryScores = judged.categories;
+    entry.humanVeto = judged.humanVeto;
+    entry.botReply = judged.botReply;
+    entry.features = features;
   }
 
   cache.set(tweet.id, entry);

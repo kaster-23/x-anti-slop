@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { CUSTOM_PREFIX, PROVIDERS, buildQuestions, customKey, toQuestion } from './provider';
+import { CUSTOM_PREFIX, PROVIDERS, buildQuestions, buildState, customKey, toQuestion } from './provider';
+import { styleQuestionCount } from './detect/questions';
 import { DEFAULT_SETTINGS, isUsable, newCustomFilter } from './defaults';
 import type { CustomFilter, Settings } from './types';
 
@@ -39,9 +40,13 @@ describe('buildQuestions', () => {
     expect(customKey(f).startsWith(CUSTOM_PREFIX)).toBe(true);
   });
 
-  test('keeps the built-in signals alongside', () => {
+  test('keeps rage bait and ads, and replaces the broad slop question with the style bank', () => {
     const questions = buildQuestions(settingsWith([filter()]));
-    expect(Object.keys(questions)).toContain('slop');
+    expect(questions.slop).toBeUndefined();
+    expect(Object.keys(questions)).toContain('reads_as_model');
+    expect(Object.keys(questions).filter((id) => id !== 'ragebait' && id !== 'ads' && !id.startsWith('cf_')).length).toBe(
+      styleQuestionCount(),
+    );
     expect(Object.keys(questions)).toContain('ragebait');
     expect(Object.keys(questions)).toContain('ads');
   });
@@ -58,8 +63,34 @@ describe('buildQuestions', () => {
     // Even a filter whose id spells a built-in name lands in its own namespace.
     const evil = filter({ id: 'slop' });
     const questions = buildQuestions(settingsWith([evil]));
-    expect(questions.slop).toEqual(buildQuestions(DEFAULT_SETTINGS).slop);
+    expect(questions.reads_as_model).toEqual(buildQuestions(DEFAULT_SETTINGS).reads_as_model);
+    expect(questions.slop).toBeUndefined();
     expect(questions[customKey(evil)]).toBeDefined();
+  });
+
+  test('asks the parent question only when the replied-to post is known', () => {
+    expect(buildQuestions(DEFAULT_SETTINGS).pivot_answers_parent).toBeUndefined();
+    expect(
+      buildQuestions(DEFAULT_SETTINGS, { text: 'not that', parentText: 'the claim', isReply: true })
+        .pivot_answers_parent,
+    ).toBeDefined();
+  });
+
+  test('state names post.text and keeps one post per request', () => {
+    const state = buildState({
+      id: '1',
+      author: '@a',
+      authorName: 'A',
+      text: 'hello',
+      hasImage: false,
+      hasVideo: false,
+      isReply: true,
+      isQuote: false,
+      parentText: 'parent words',
+    });
+    expect(state.post).toEqual({ text: 'hello' });
+    expect(state.parent).toEqual({ text: 'parent words' });
+    expect(state).not.toHaveProperty('posts');
   });
 
   test('omits the quality question unless a floor is set', () => {
