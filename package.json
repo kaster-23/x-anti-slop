@@ -1,0 +1,39 @@
+{
+  "name": "x-anti-slop",
+  "description": "Hides AI-generated slop posts on X while you scroll, using TypeSafe's Jev model.",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.33.4",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "lint": "eslint .",
+    "compile": "tsc --noEmit",
+    "postinstall": "wxt prepare",
+    "eval": "bun run scripts/eval.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/react": "^19.2.14",
+    "@eslint/js": "^10.0.1",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.1.5",
+    "happy-dom": "^20.14.5",
+    "eslint": "^10.1.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.2",
+    "web-ext": "^10.5.0",
+    "wxt": "^0.21.3"
+  }
+}

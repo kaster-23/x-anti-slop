@@ -1,0 +1,27 @@
+x-anti-slop
+================
+
+This project is a rebranded import of clean-twitter, not a GitHub fork.
+
+clean-twitter
+-------------
+
+Source: https://github.com/midplane/clean-twitter
+Copyright (c) 2026 Nikhil Bafna
+License: MIT
+
+The MIT license text and the copyright notice above are preserved in LICENSE.
+That notice must stay with any substantial copy of this software.
+
+slop-filter
+-----------
+
+Source: https://github.com/adamnroman/slop-filter
+Copyright (c) 2026 Adam Roman
+License: MIT
+
+No source code from slop-filter is included in this revision. Its detection
+logic (style questions, local counts, and label-fitted weights) is credited
+here because a later change plans to port that logic into this extension.
+When that port lands, the MIT license terms require Adam Roman's copyright
+notice to travel with the ported code.
