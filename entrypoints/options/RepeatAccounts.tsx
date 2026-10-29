@@ -11,13 +11,7 @@ import { loadRepeat, repeatStore, updateRepeat } from '@/lib/repeat-store';
 import { RepeatAccountsView } from './RepeatAccountsView';
 
 /** Settings-page list. The timeline writes the counts; this page reviews them. */
-export default function RepeatAccounts({
-  threshold,
-  onThreshold,
-}: {
-  threshold: number;
-  onThreshold: (threshold: number) => void;
-}) {
+export default function RepeatAccounts({ threshold }: { threshold: number }) {
   const [accounts, setAccounts] = useState<FlaggedAccount[]>([]);
 
   useEffect(() => {
@@ -43,7 +37,6 @@ export default function RepeatAccounts({
     <RepeatAccountsView
       threshold={threshold}
       accounts={accounts}
-      onThreshold={onThreshold}
       onReset={(handle) => {
         void change((current) => resetCount(current, handle));
       }}

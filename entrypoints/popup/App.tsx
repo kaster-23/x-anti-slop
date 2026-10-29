@@ -1,23 +1,17 @@
 import { useEffect, useState } from 'react';
 import { browser } from '#imports';
+import { InfoTip } from '@/components/InfoTip';
+import { ENABLED_HELP, MEDIA_HELP, PROMOTED_HELP, QUALITY_HELP, SIGNAL_HELP } from '@/components/help';
+import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/LabeledSlider';
+import { PresetPicker } from '@/components/PresetPicker';
 import { saveSettings } from '@/lib/settings';
 import { blankKeys, isUsable, THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
+import { presetChangePatch, presetName, presetPatch } from '@/lib/presets';
 import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import type { MediaFilterId, Settings, SignalId, Stats } from '@/lib/types';
 
-const SIGNALS: Array<{ id: SignalId; label: string; hint: string }> = [
-  { id: 'slop', label: 'AI slop', hint: 'Writing-style score from Jev, local counts, and your labels' },
-  { id: 'ragebait', label: 'Rage bait', hint: 'Engineered outrage and dunks' },
-  { id: 'ads', label: 'Ads & shilling', hint: 'Sales pitches, affiliate and crypto spam' },
-];
-
-const MEDIA: Array<{ id: MediaFilterId; label: string }> = [
-  { id: 'images', label: 'Images' },
-  { id: 'videos', label: 'Videos' },
-  { id: 'gifs', label: 'GIFs' },
-];
-
-/** The lowest quality level the slider offers; 0 is the off position. */
+const SIGNAL_IDS: SignalId[] = ['slop', 'ragebait', 'ads'];
+const MEDIA_IDS: MediaFilterId[] = ['images', 'videos', 'gifs'];
 const QUALITY_STEP = 0.5;
 
 export default function App() {
@@ -46,241 +40,227 @@ export default function App() {
   }, []);
 
   async function update(patch: Partial<Settings>) {
-    setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
-    setSettings(blankKeys(await saveSettings(patch)));
+    if (!settings) return;
+    const nextPatch = presetChangePatch(settings, patch);
+    setSettings((prev) => (prev ? { ...prev, ...nextPatch } : prev));
+    setSettings(blankKeys(await saveSettings(nextPatch)));
   }
 
-  if (!settings) return <div className="card">Loading…</div>;
+  if (!settings) return <div className="pop"><p className="hint" style={{ padding: 16 }}>Loading…</p></div>;
 
   const customFilters = (settings.customFilters ?? []).filter(isUsable);
+  const mode =
+    settings.preset === 'custom'
+      ? `Custom, based on ${presetName(settings.presetBase)}`
+      : presetName(settings.preset);
 
   function patchFilter(id: string, fields: Partial<(typeof customFilters)[number]>) {
     update({
-      customFilters: (settings!.customFilters ?? []).map((f) =>
-        f.id === id ? { ...f, ...fields } : f,
+      customFilters: (settings!.customFilters ?? []).map((filter) =>
+        filter.id === id ? { ...filter, ...fields } : filter,
       ),
     });
   }
 
   return (
-    <>
-      <div className="card head">
-        <h1 className="grow">X-AntiSlop</h1>
-        <label className="switch" title={settings.enabled ? 'Turn off' : 'Turn on'}>
+    <div className="pop">
+      <header className="mast">
+        <div className="grow">
+          <h1>X-AntiSlop</h1>
+          <p className="status-line">{hasKey ? 'Key connected' : 'No API key'} · {mode}</p>
+        </div>
+        <InfoTip
+          label={ENABLED_HELP.label}
+          explanation={ENABLED_HELP.explanation}
+          example={ENABLED_HELP.example}
+          align="end"
+        />
+        <label className="switch">
           <input
             type="checkbox"
             checked={settings.enabled}
+            aria-label={settings.enabled ? 'Turn filtering off' : 'Turn filtering on'}
             onChange={(e) => update({ enabled: e.target.checked })}
           />
           <span />
         </label>
-      </div>
+      </header>
 
-      <div className={settings.enabled ? '' : 'muted-panel'}>
-        {apiError && (
-          <div className="card notice error">
-            <div className="row">
-              <span className="grow">
-                {apiError.message}{' '}
-                {apiError.message.startsWith('Check your key') && (
-                  <a href="#" onClick={openOptions}>
-                    Open settings
-                  </a>
-                )}
-              </span>
-              <button
-                type="button"
-                className="dismiss"
-                aria-label="Dismiss"
-                onClick={() => {
-                  setApiError(null);
-                  browser.runtime.sendMessage({ type: 'dismissError' }).catch(() => {});
-                }}
-              >
-                ✕
-              </button>
-            </div>
+      {apiError && (
+        <div className="notice error" role="status">
+          <div className="row">
+            <span className="grow">
+              {apiError.message}{' '}
+              {apiError.message.startsWith('Check your key') && (
+                <a href="#" onClick={openOptions}>
+                  Open settings
+                </a>
+              )}
+            </span>
+            <button
+              type="button"
+              className="dismiss"
+              aria-label="Dismiss"
+              onClick={() => {
+                setApiError(null);
+                browser.runtime.sendMessage({ type: 'dismissError' }).catch(() => {});
+              }}
+            >
+              ✕
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {!hasKey && (
-          <div className="card notice">
-            No API key yet, so the model filters below are off.{' '}
-            <a href="#" onClick={openOptions}>
-              Add a {PROVIDERS[settings.provider].name} key
-            </a>
-            .
+      {!hasKey && (
+        <div className="notice">
+          No API key yet, so the model filters are off.{' '}
+          <a href="#" onClick={openOptions}>
+            Add a {PROVIDERS[settings.provider].name} key
+          </a>
+          .
+        </div>
+      )}
+
+      <section className="section" aria-labelledby="popup-preset">
+        <h2 id="popup-preset">Preset</h2>
+        <PresetPicker
+          variant="compact"
+          preset={settings.preset}
+          presetBase={settings.presetBase}
+          onSelect={(id) => update(presetPatch(id))}
+          onReset={() => update(presetPatch(settings.presetBase))}
+        />
+      </section>
+
+      <section className="section" aria-labelledby="popup-totals">
+        <h2 id="popup-totals">Totals</h2>
+        <div className="totals">
+          <div className="total">
+            <b>{(stats?.checked ?? 0).toLocaleString()}</b>
+            <span>checked</span>
           </div>
-        )}
+          <div className="total">
+            <b>{(stats?.filtered ?? 0).toLocaleString()}</b>
+            <span>hidden</span>
+          </div>
+          <div className="total">
+            <b>{(stats?.settledLocally ?? 0).toLocaleString()}</b>
+            <span>local</span>
+          </div>
+        </div>
+        <p className="hint total-note">
+          Since the counters were reset
+          {stats ? ` · ${formatCost(stats.cost)}` : ''}
+        </p>
+      </section>
 
-        {/* Dimming both the wrapper and this card would compound to near-invisible. */}
-        <div className={`card ${!hasKey && settings.enabled ? 'muted-panel' : ''}`}>
-          <h2>Filter out</h2>
-          <p className="caption">
-            Hide a post when the model is at least this sure. Lower catches more, and gets
-            more wrong.
-          </p>
-
-          {SIGNALS.map((signal) => {
-            const cfg = settings.signals[signal.id];
+      <details className={`tune${settings.enabled ? '' : ' muted-panel'}`}>
+        <summary>Adjust filters</summary>
+        <div className={`tune-body${!hasKey ? ' muted-panel' : ''}`}>
+          {SIGNAL_IDS.map((id) => {
+            const help = SIGNAL_HELP[id];
+            const cfg = settings.signals[id];
             return (
-              <div className="row" key={signal.id}>
-                <label className="check grow" title={signal.hint}>
-                  <input
-                    type="checkbox"
-                    checked={cfg.enabled}
-                    onChange={(e) =>
-                      update({
-                        signals: {
-                          ...settings.signals,
-                          [signal.id]: { ...cfg, enabled: e.target.checked },
-                        },
-                      })
-                    }
-                  />
-                  <span>{signal.label}</span>
-                </label>
-                <input
-                  type="range"
-                  min={THRESHOLD_MIN}
-                  max={THRESHOLD_MAX}
-                  step={0.05}
-                  value={cfg.threshold}
-                  disabled={!cfg.enabled}
-                  aria-label={`${signal.label} confidence threshold`}
-                  onChange={(e) =>
-                    update({
-                      signals: {
-                        ...settings.signals,
-                        [signal.id]: { ...cfg, threshold: Number(e.target.value) },
-                      },
-                    })
-                  }
-                />
-                <span className="thresh sub">{Math.round(cfg.threshold * 100)}%</span>
-              </div>
+              <ConfidenceSlider
+                key={id}
+                id={`popup-${id}`}
+                label={help.label}
+                explanation={help.explanation}
+                example={help.example}
+                enabled={cfg.enabled}
+                onEnabled={(enabled) =>
+                  update({ signals: { ...settings.signals, [id]: { ...cfg, enabled } } })
+                }
+                threshold={cfg.threshold}
+                onThreshold={(threshold) =>
+                  update({ signals: { ...settings.signals, [id]: { ...cfg, threshold } } })
+                }
+              />
             );
           })}
-
           {customFilters.map((filter) => (
-            <div className="row" key={filter.id}>
-              <label className="check grow" title={filter.instructions}>
-                <input
-                  type="checkbox"
-                  checked={filter.enabled}
-                  onChange={(e) => patchFilter(filter.id, { enabled: e.target.checked })}
-                />
-                <span className="ellipsis">{filter.label}</span>
-              </label>
-              <input
-                type="range"
-                min={THRESHOLD_MIN}
-                max={THRESHOLD_MAX}
-                step={0.05}
-                value={filter.threshold}
-                disabled={!filter.enabled}
-                aria-label={`${filter.label} confidence threshold`}
-                onChange={(e) => patchFilter(filter.id, { threshold: Number(e.target.value) })}
-              />
-              <span className="thresh sub">{Math.round(filter.threshold * 100)}%</span>
-            </div>
-          ))}
-
-          <div className="row quality">
-            <label className="check grow" title="Rates every post 0–3 on informational value">
-              <input
-                type="checkbox"
-                checked={settings.minQuality > 0}
-                onChange={(e) => update({ minQuality: e.target.checked ? 1 : 0 })}
-              />
-              <span>Low value</span>
-            </label>
-            <input
-              type="range"
-              min={QUALITY_STEP}
-              max={2.5}
-              step={QUALITY_STEP}
-              value={settings.minQuality || 1}
-              disabled={settings.minQuality === 0}
-              aria-label="Quality floor"
-              onChange={(e) => update({ minQuality: Number(e.target.value) })}
+            <LabeledSlider
+              key={filter.id}
+              id={`popup-cf-${filter.id}`}
+              label={filter.label}
+              explanation={filter.instructions || 'A yes/no question you wrote.'}
+              example="Example: the sample you tried this question on from settings."
+              checked={filter.enabled}
+              onChecked={(enabled) => patchFilter(filter.id, { enabled })}
+              value={filter.threshold}
+              min={THRESHOLD_MIN}
+              max={THRESHOLD_MAX}
+              step={0.05}
+              invert
+              display={`${Math.round(filter.threshold * 100)}%`}
+              left="Relaxed"
+              right="Strict"
+              onChange={(threshold) => patchFilter(filter.id, { threshold })}
             />
-            <span className="thresh sub">
-              {settings.minQuality > 0 ? settings.minQuality.toFixed(1) : '—'}
-            </span>
-          </div>
+          ))}
+          <LabeledSlider
+            id="popup-quality"
+            label={QUALITY_HELP.label}
+            explanation={QUALITY_HELP.explanation}
+            example={QUALITY_HELP.example}
+            checked={settings.minQuality > 0}
+            onChecked={(on) => update({ minQuality: on ? 1 : 0 })}
+            value={settings.minQuality || 1}
+            min={QUALITY_STEP}
+            max={2.5}
+            step={QUALITY_STEP}
+            display={settings.minQuality > 0 ? settings.minQuality.toFixed(1) : 'Off'}
+            left="Lenient"
+            right="Picky"
+            onChange={(minQuality) => update({ minQuality })}
+          />
           {settings.minQuality > 0 && (
-            <p className="caption below">
-              Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”. Adds one
-              question per post.
+            <p className="hint" style={{ marginTop: 6 }}>
+              Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
             </p>
           )}
-
-          <p className="caption below">
+        </div>
+        <div className="tune-body">
+          <ToggleRow
+            id="popup-promoted"
+            label={PROMOTED_HELP.label}
+            explanation={PROMOTED_HELP.explanation}
+            example={PROMOTED_HELP.example}
+            checked={settings.hidePromoted}
+            onChange={(hidePromoted) => update({ hidePromoted })}
+          />
+          {MEDIA_IDS.map((id) => {
+            const help = MEDIA_HELP[id];
+            return (
+              <ToggleRow
+                key={id}
+                id={`popup-media-${id}`}
+                label={help.label}
+                explanation={help.explanation}
+                example={help.example}
+                checked={settings.mediaFilters[id]}
+                onChange={(checked) =>
+                  update({ mediaFilters: { ...settings.mediaFilters, [id]: checked } })
+                }
+              />
+            );
+          })}
+          <p className="hint" style={{ marginTop: 8 }}>
             <a href="#" onClick={openOptions}>
-              {customFilters.length ? 'Edit your filters' : 'Write your own filter'}
+              All settings
             </a>
           </p>
         </div>
+      </details>
 
-        <div className="card">
-          <h2>
-            Always hide <span className="pill">free</span>
-          </h2>
-          <p className="caption">Read straight from the page, so these cost nothing.</p>
-
-          <div className="row">
-            <label className="check grow">
-              <input
-                type="checkbox"
-                checked={settings.hidePromoted}
-                onChange={(e) => update({ hidePromoted: e.target.checked })}
-              />
-              <span>Promoted posts</span>
-            </label>
-          </div>
-
-          <div className="row media">
-            {MEDIA.map((m) => (
-              <label className="check" key={m.id}>
-                <input
-                  type="checkbox"
-                  checked={settings.mediaFilters[m.id]}
-                  onChange={(e) =>
-                    update({
-                      mediaFilters: { ...settings.mediaFilters, [m.id]: e.target.checked },
-                    })
-                  }
-                />
-                <span>{m.label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {stats && stats.checked > 0 && (
-          <div className="card">
-            <h2>Usage</h2>
-            <div className="row">
-              <span className="grow sub">
-                {stats.checked.toLocaleString()} checked
-                <br />
-                {stats.filtered.toLocaleString()} hidden · {(stats.settledLocally ?? 0).toLocaleString()}{' '}
-                settled locally
-              </span>
-              <span className="sub cost">{formatCost(stats.cost)}</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="card foot">
+      <footer className="foot">
         <a className="grow" href="#" onClick={openOptions}>
           Settings
         </a>
-        <span className="sub">{PROVIDERS[settings.provider].name}</span>
-      </div>
-    </>
+        <span className="hint">{PROVIDERS[settings.provider].name}</span>
+      </footer>
+    </div>
   );
 }
 

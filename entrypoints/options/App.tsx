@@ -1,14 +1,36 @@
 import { useEffect, useState } from 'react';
 import { browser } from '#imports';
+import { InfoTip } from '@/components/InfoTip';
+import {
+  ALLOW_HELP,
+  BLOCK_HELP,
+  HIDE_MODE_HELP,
+  HIDE_UNTIL_HELP,
+  KEY_HELP,
+  MEDIA_HELP,
+  MODEL_HELP,
+  PROMOTED_HELP,
+  PROVIDER_HELP,
+  QUALITY_HELP,
+  REPEAT_HELP,
+  SIGNAL_HELP,
+} from '@/components/help';
+import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/LabeledSlider';
+import { PresetPicker } from '@/components/PresetPicker';
 import { loadSettings, saveSettings } from '@/lib/settings';
-import { PROVIDERS, formatCost } from '@/lib/provider';
+import { activeKey } from '@/lib/defaults';
+import { presetChangePatch, presetPatch } from '@/lib/presets';
+import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import { parseHandleList } from '@/lib/prefilter';
+import { REPEAT_THRESHOLD_MAX, REPEAT_THRESHOLD_MIN } from '@/lib/repeat';
 import CustomFilters from './CustomFilters';
 import RepeatAccounts from './RepeatAccounts';
-import SlopTuning from './SlopTuning';
-import type { HideMode, ProviderId, Settings, Stats } from '@/lib/types';
+import { SlopAdvanced, SlopBuckets } from './SlopTuning';
+import type { HideMode, MediaFilterId, ProviderId, Settings, SignalId, Stats } from '@/lib/types';
 
 const PROVIDER_IDS = Object.keys(PROVIDERS) as ProviderId[];
+const SIGNAL_IDS: SignalId[] = ['slop', 'ragebait', 'ads'];
+const MEDIA_IDS: MediaFilterId[] = ['images', 'videos', 'gifs'];
 
 const HIDE_MODES: Array<{ id: HideMode; label: string; hint: string }> = [
   { id: 'collapse', label: 'Collapse', hint: 'Replace the post with a one-line note' },
@@ -42,26 +64,35 @@ export default function App() {
   }
 
   async function update(patch: Partial<Settings>) {
-    setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
-    const saved = await saveSettings(patch);
+    if (!settings) return;
+    const nextPatch = presetChangePatch(settings, patch);
+    setSettings((prev) => (prev ? { ...prev, ...nextPatch } : prev));
+    const saved = await saveSettings(nextPatch);
     // saveSettings returns settings with the key removed. Keep the value the
     // input already has; it is the only extension page that edits it.
     setSettings((prev) =>
       prev
         ? {
             ...saved,
-            typesafeApiKey: patch.typesafeApiKey ?? prev.typesafeApiKey,
-            openrouterApiKey: patch.openrouterApiKey ?? prev.openrouterApiKey,
+            typesafeApiKey: nextPatch.typesafeApiKey ?? prev.typesafeApiKey,
+            openrouterApiKey: nextPatch.openrouterApiKey ?? prev.openrouterApiKey,
           }
         : saved,
     );
   }
 
-  if (!settings) return <main className="card">Loading…</main>;
+  if (!settings) {
+    return (
+      <main className="page">
+        <p className="hint">Loading settings…</p>
+      </main>
+    );
+  }
 
   const provider = PROVIDERS[settings.provider];
   const keyField = settings.provider === 'openrouter' ? 'openrouterApiKey' : 'typesafeApiKey';
   const apiKey = settings[keyField];
+  const hasKey = activeKey(settings).length > 0;
 
   async function runTest() {
     setTest({ status: 'testing' });
@@ -79,16 +110,265 @@ export default function App() {
   }
 
   return (
-    <main>
-      <header>
-        <h1>X-AntiSlop</h1>
-        <p>Hides AI-generated slop posts on X while you scroll, using TypeSafe's Jev.</p>
+    <main className="page">
+      <header className="mast">
+        <div>
+          <h1>X-AntiSlop</h1>
+          <p className="lede">Hides AI slop, rage bait, and ads on X. Start from a preset, then change only what you want.</p>
+        </div>
+        <p className={`status${hasKey ? ' is-on' : ''}`} role="status">
+          <span className="status-dot" aria-hidden="true" />
+          {hasKey ? 'Key connected' : 'No API key'}
+        </p>
       </header>
 
-      <section className="card">
-        <h2>Model provider</h2>
+      <section className="panel" aria-labelledby="preset-heading">
+        <div className="panel-head">
+          <h2 id="preset-heading">Preset</h2>
+          <p className="hint">Each card sets every filter knob. Balanced is what a new install starts on.</p>
+        </div>
+        <PresetPicker
+          preset={settings.preset}
+          presetBase={settings.presetBase}
+          onSelect={(id) => update(presetPatch(id))}
+          onReset={() => update(presetPatch(settings.presetBase))}
+        />
+      </section>
+
+      <section className="panel" id="filters" aria-labelledby="filters-heading">
+        <div className="panel-head">
+          <h2 id="filters-heading">Filters</h2>
+          <p className="hint">
+            Left is relaxed, right is strict. The number is the confidence required before a post
+            is hidden.
+          </p>
+        </div>
+
+        {SIGNAL_IDS.map((id) => {
+          const help = SIGNAL_HELP[id];
+          const cfg = settings.signals[id];
+          return (
+            <ConfidenceSlider
+              key={id}
+              id={`signal-${id}`}
+              label={help.label}
+              explanation={help.explanation}
+              example={help.example}
+              tipKey={id}
+              enabled={cfg.enabled}
+              onEnabled={(enabled) =>
+                update({ signals: { ...settings.signals, [id]: { ...cfg, enabled } } })
+              }
+              threshold={cfg.threshold}
+              onThreshold={(threshold) =>
+                update({ signals: { ...settings.signals, [id]: { ...cfg, threshold } } })
+              }
+            />
+          );
+        })}
+
+        <div className="toggle-list">
+          <ToggleRow
+            id="hide-promoted"
+            label={PROMOTED_HELP.label}
+            explanation={PROMOTED_HELP.explanation}
+            example={PROMOTED_HELP.example}
+            tipKey="promoted"
+            checked={settings.hidePromoted}
+            onChange={(hidePromoted) => update({ hidePromoted })}
+          />
+          {MEDIA_IDS.map((id) => {
+            const help = MEDIA_HELP[id];
+            return (
+              <ToggleRow
+                key={id}
+                id={`media-${id}`}
+                label={help.label}
+                explanation={help.explanation}
+                example={help.example}
+                tipKey={id}
+                checked={settings.mediaFilters[id]}
+                onChange={(checked) =>
+                  update({ mediaFilters: { ...settings.mediaFilters, [id]: checked } })
+                }
+              />
+            );
+          })}
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <LabeledSlider
+            id="repeat-threshold"
+            label={REPEAT_HELP.label}
+            explanation={REPEAT_HELP.explanation}
+            example={REPEAT_HELP.example}
+            tipKey="repeat"
+            value={settings.repeatThreshold}
+            min={REPEAT_THRESHOLD_MIN}
+            max={REPEAT_THRESHOLD_MAX}
+            step={1}
+            invert
+            display={String(settings.repeatThreshold)}
+            left="Patient"
+            right="Quick"
+            onChange={(repeatThreshold) => update({ repeatThreshold })}
+          />
+        </div>
+
+        <h3 className="group-label">Writing-style buckets</h3>
+        <p className="hint">
+          A bucket can hide a post on its own when its strongest tell clears the bar, even if the
+          combined slop score does not.
+        </p>
+        <div style={{ marginTop: 12 }}>
+          <SlopBuckets settings={settings} onChange={update} />
+        </div>
+
+        <details className="advanced">
+          <summary>
+            <span className="summary-row">Advanced</span>
+            <span className="hint">Reply bar, quality, marks, and your own questions</span>
+          </summary>
+          <div className="advanced-body">
+            <SlopAdvanced settings={settings} onChange={update} />
+            <div style={{ marginTop: 16 }}>
+              <LabeledSlider
+                id="quality"
+                label={QUALITY_HELP.label}
+                explanation={QUALITY_HELP.explanation}
+                example={QUALITY_HELP.example}
+                tipKey="quality"
+                checked={settings.minQuality > 0}
+                onChecked={(on) => update({ minQuality: on ? 1 : 0 })}
+                value={settings.minQuality || 1}
+                min={0.5}
+                max={2.5}
+                step={0.5}
+                display={settings.minQuality > 0 ? settings.minQuality.toFixed(1) : 'Off'}
+                left="Lenient"
+                right="Picky"
+                onChange={(minQuality) => update({ minQuality })}
+              />
+              {settings.minQuality > 0 && (
+                <p className="hint" style={{ marginTop: 6 }}>
+                  Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
+                </p>
+              )}
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <ToggleRow
+                id="hide-until"
+                label={HIDE_UNTIL_HELP.label}
+                explanation={HIDE_UNTIL_HELP.explanation}
+                example={HIDE_UNTIL_HELP.example}
+                tipKey="hide-until"
+                checked={settings.hideUntilChecked}
+                onChange={(hideUntilChecked) => update({ hideUntilChecked })}
+              />
+            </div>
+            <div style={{ marginTop: 18 }}>
+              <CustomFilters
+                filters={settings.customFilters}
+                onChange={(customFilters) => update({ customFilters })}
+              />
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section className="panel lists" aria-labelledby="lists-heading">
+        <div className="panel-head">
+          <h2 id="lists-heading">Lists</h2>
+          <p className="hint">Accounts you always show, accounts you always hide, and ones the timeline has flagged.</p>
+        </div>
+
+        <h3>
+          <span className="field-label">
+            Never filter
+            <InfoTip label={ALLOW_HELP.label} explanation={ALLOW_HELP.explanation} example={ALLOW_HELP.example} />
+          </span>
+        </h3>
+        <textarea
+          spellCheck={false}
+          aria-label="Accounts that skip every filter"
+          placeholder="@friend&#10;@favouriteaccount"
+          value={allowlistText}
+          onChange={(e) => setAllowlistText(e.target.value)}
+          onBlur={() => update({ allowlist: parseHandleList(allowlistText) })}
+        />
+        <p className="hint" style={{ marginTop: 6 }}>One handle per line. These accounts skip every filter.</p>
+
+        <h3>
+          <span className="field-label">
+            Always hide
+            <InfoTip label={BLOCK_HELP.label} explanation={BLOCK_HELP.explanation} example={BLOCK_HELP.example} />
+          </span>
+        </h3>
+        <textarea
+          spellCheck={false}
+          aria-label="Accounts that are always hidden"
+          placeholder="@spammer"
+          value={blocklistText}
+          onChange={(e) => setBlocklistText(e.target.value)}
+          onBlur={() => update({ blocklist: parseHandleList(blocklistText) })}
+        />
+        <p className="hint" style={{ marginTop: 6 }}>
+          One handle per line. These accounts are hidden, and the post is not sent to the model.
+          Posts under five words stay visible without a model call. Hashtag piles, emoji piles,
+          link dumps, and all-caps shouting are hidden on this device.
+        </p>
+
+        <div style={{ marginTop: 18 }}>
+          <RepeatAccounts threshold={settings.repeatThreshold} />
+        </div>
+      </section>
+
+      <section className="panel" aria-labelledby="appearance-heading">
+        <div className="panel-head">
+          <h2 id="appearance-heading">Appearance</h2>
+        </div>
         <div className="field">
-          <div className="seg">
+          <div className="field-label">
+            <span id="hide-mode-label">When a post is filtered</span>
+            <InfoTip
+              label={HIDE_MODE_HELP.label}
+              explanation={HIDE_MODE_HELP.explanation}
+              example={HIDE_MODE_HELP.example}
+            />
+          </div>
+          <div className="seg" role="group" aria-labelledby="hide-mode-label">
+            {HIDE_MODES.map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                title={mode.hint}
+                aria-pressed={settings.hideMode === mode.id}
+                onClick={() => update({ hideMode: mode.id })}
+              >
+                {mode.label}
+              </button>
+            ))}
+          </div>
+          <p className="hint" style={{ marginTop: 8 }}>
+            {HIDE_MODES.find((mode) => mode.id === settings.hideMode)?.hint}
+          </p>
+        </div>
+      </section>
+
+      <section className="panel" aria-labelledby="provider-heading">
+        <div className="panel-head">
+          <h2 id="provider-heading">Provider and API key</h2>
+        </div>
+        <div className="field">
+          <div className="field-label">
+            <span id="provider-label">{PROVIDER_HELP.label}</span>
+            <InfoTip
+              label={PROVIDER_HELP.label}
+              explanation={PROVIDER_HELP.explanation}
+              example={PROVIDER_HELP.example}
+            />
+          </div>
+          <div className="seg" role="group" aria-labelledby="provider-label">
             {PROVIDER_IDS.map((id) => (
               <button
                 key={id}
@@ -103,14 +383,13 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="sub">
-            Both routes run the same Jev model and take the same request. TypeSafe bills you
-            directly; OpenRouter bills through your OpenRouter credits.
-          </div>
         </div>
 
         <div className="field">
-          <label htmlFor="key">API key</label>
+          <div className="field-label">
+            <label htmlFor="key">{KEY_HELP.label}</label>
+            <InfoTip label={KEY_HELP.label} explanation={KEY_HELP.explanation} example={KEY_HELP.example} />
+          </div>
           <div className="key-row">
             <input
               id="key"
@@ -128,7 +407,7 @@ export default function App() {
               {test.status === 'testing' ? 'Testing…' : 'Test'}
             </button>
           </div>
-          <div className="sub">
+          <p className="hint" style={{ marginTop: 6 }}>
             {test.status === 'ok' && <span className="status-ok">{test.message}</span>}
             {test.status === 'error' && <span className="status-err">{test.message}</span>}
             {test.status !== 'ok' && test.status !== 'error' && (
@@ -140,11 +419,18 @@ export default function App() {
                 .
               </>
             )}
-          </div>
+          </p>
         </div>
 
         <div className="field">
-          <label htmlFor="model">Model</label>
+          <div className="field-label">
+            <label htmlFor="model">{MODEL_HELP.label}</label>
+            <InfoTip
+              label={MODEL_HELP.label}
+              explanation={MODEL_HELP.explanation}
+              example={MODEL_HELP.example}
+            />
+          </div>
           <input
             id="model"
             type="text"
@@ -153,95 +439,16 @@ export default function App() {
             value={settings.model}
             onChange={(e) => update({ model: e.target.value })}
           />
-          <div className="sub">Leave blank to use the default.</div>
-        </div>
-      </section>
-
-      <SlopTuning settings={settings} onChange={update} />
-
-      <CustomFilters
-        filters={settings.customFilters}
-        onChange={(customFilters) => update({ customFilters })}
-      />
-
-      <section className="card">
-        <h2>Appearance</h2>
-        <div className="field">
-          <label>When a post is filtered</label>
-          <div className="seg">
-            {HIDE_MODES.map((mode) => (
-              <button
-                key={mode.id}
-                type="button"
-                title={mode.hint}
-                aria-pressed={settings.hideMode === mode.id}
-                onClick={() => update({ hideMode: mode.id })}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
-          <div className="sub">{HIDE_MODES.find((m) => m.id === settings.hideMode)?.hint}</div>
-        </div>
-
-        <div className="field">
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={settings.hideUntilChecked}
-              onChange={(e) => update({ hideUntilChecked: e.target.checked })}
-            />
-            <span>Hide posts until they have been checked</span>
-          </label>
-          <div className="sub">
-            Stops a post flashing into view before it has been judged. Posts reappear on their own
-            if a check is still running after eight seconds.
-          </div>
-        </div>
-      </section>
-
-      <RepeatAccounts
-        threshold={settings.repeatThreshold}
-        onThreshold={(repeatThreshold) => update({ repeatThreshold })}
-      />
-
-      <section className="card">
-        <h2>Never filter</h2>
-        <div className="field">
-          <textarea
-            spellCheck={false}
-            placeholder="@friend&#10;@favouriteaccount"
-            value={allowlistText}
-            onChange={(e) => setAllowlistText(e.target.value)}
-            onBlur={() => update({ allowlist: parseHandleList(allowlistText) })}
-          />
-          <div className="sub">One handle per line. These accounts skip every filter.</div>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2>Always hide</h2>
-        <div className="field">
-          <textarea
-            spellCheck={false}
-            placeholder="@spammer"
-            value={blocklistText}
-            onChange={(e) => setBlocklistText(e.target.value)}
-            onBlur={() => update({ blocklist: parseHandleList(blocklistText) })}
-          />
-          <div className="sub">
-            One handle per line. These accounts are hidden, and the post is not sent to the model.
-          </div>
-        </div>
-        <div className="sub">
-          Posts under five words stay visible without a model call. Hashtag piles, emoji piles,
-          link dumps, and all-caps shouting are hidden on this device.
+          <p className="hint" style={{ marginTop: 6 }}>Leave blank to use the default.</p>
         </div>
       </section>
 
       {stats && (
-        <section className="card">
-          <h2>Usage</h2>
+        <section className="panel" aria-labelledby="usage-heading">
+          <div className="panel-head">
+            <h2 id="usage-heading">Usage</h2>
+            <p className="hint">Running totals since the counters were last reset. They are not broken out by day.</p>
+          </div>
           <div className="stats-grid">
             <div className="stat">
               <b>{stats.checked.toLocaleString()}</b>
@@ -261,12 +468,12 @@ export default function App() {
             </div>
           </div>
           {Object.keys(stats.bySignal).length > 0 && (
-            <div className="sub" style={{ marginTop: 10 }}>
+            <p className="hint" style={{ marginTop: 10 }}>
               {Object.entries(stats.bySignal)
                 .sort((a, b) => b[1] - a[1])
                 .map(([label, n]) => `${label}: ${n}`)
                 .join(' · ')}
-            </div>
+            </p>
           )}
           <div className="row wrap" style={{ marginTop: 14 }}>
             <button
