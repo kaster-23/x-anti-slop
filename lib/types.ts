@@ -80,6 +80,7 @@ export interface Verdict {
 export type Message =
   | { type: 'classify'; tweets: TweetInput[] }
   | { type: 'getSettings' }
+  | { type: 'getPublicSettings' }
   | { type: 'settingsChanged' }
   | { type: 'getStats' }
   | { type: 'resetStats' }

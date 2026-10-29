@@ -1,8 +1,8 @@
 import { defineContentScript, browser } from '#imports';
 import { TWEET_SELECTOR, extractTweet, readTweetId, type Extracted } from '@/lib/extract';
-import { loadSettings } from '@/lib/settings';
 import { activeCustomFilters } from '@/lib/provider';
-import { activeKey } from '@/lib/defaults';
+import { DEFAULT_SETTINGS, blankKeys } from '@/lib/defaults';
+import { redactSecrets } from '@/lib/redact';
 import type { Settings, TweetInput, Verdict } from '@/lib/types';
 import './style.css';
 
@@ -28,8 +28,8 @@ export default defineContentScript({
   cssInjectionMode: 'manifest',
 
   async main(ctx) {
-    let settings = await loadSettings();
-    if (ctx.isInvalid) return;
+    let settings = DEFAULT_SETTINGS;
+    let hasKey = false;
 
     /** X recycles DOM nodes, so decisions are remembered per status id rather
      *  than per element. */
@@ -41,29 +41,36 @@ export default defineContentScript({
     /** Bumped on every settings push. In-flight scans and failsafe timers
      *  captured the previous value and must not apply it afterwards. */
     let epoch = 0;
+    let ready = false;
+
+    async function applySettings(generation: number) {
+      try {
+        const next = await loadTimeline();
+        if (generation !== epoch || ctx.isInvalid) return;
+        settings = next.settings;
+        hasKey = next.hasKey;
+      } catch (err) {
+        // Fail open: a settings read that throws should not leave posts hidden.
+        console.warn('[x-anti-slop] settings load failed', errorText(err));
+        if (generation !== epoch || ctx.isInvalid) return;
+        settings = { ...settings, enabled: false };
+        hasKey = false;
+      }
+      if (generation !== epoch || ctx.isInvalid) return;
+      ready = true;
+      decided.clear();
+      queue.clear();
+      if (flushTimer !== undefined) {
+        clearTimeout(flushTimer);
+        flushTimer = undefined;
+      }
+      resetAll();
+      scan();
+    }
 
     const onMessage = (message: { type?: string }) => {
       if (message?.type !== 'settingsChanged') return;
-      const generation = ++epoch;
-      void (async () => {
-        try {
-          settings = await loadSettings();
-        } catch (err) {
-          // Fail open: a settings read that throws should not leave posts hidden.
-          console.warn('[x-anti-slop] settings reload failed', err);
-          if (generation !== epoch || ctx.isInvalid) return;
-          settings = { ...settings, enabled: false };
-        }
-        if (generation !== epoch || ctx.isInvalid) return;
-        decided.clear();
-        queue.clear();
-        if (flushTimer !== undefined) {
-          clearTimeout(flushTimer);
-          flushTimer = undefined;
-        }
-        resetAll();
-        scan();
-      })();
+      void applySettings(++epoch);
     };
 
     browser.runtime.onMessage.addListener(onMessage);
@@ -80,10 +87,10 @@ export default defineContentScript({
       browser.runtime.onMessage.removeListener(onMessage);
     });
 
-    scan();
+    await applySettings(++epoch);
 
     function scheduleScan() {
-      if (ctx.isInvalid) return;
+      if (!ready || ctx.isInvalid) return;
       if (scanTimer !== undefined) return;
       scanTimer = ctx.setTimeout(() => {
         scanTimer = undefined;
@@ -140,7 +147,7 @@ export default defineContentScript({
       if (prior === 'local') return;
 
       if (!needsModel(settings)) return;
-      if (!activeKey(settings)) return;
+      if (!hasKey) return;
       // A post with no text gives the model nothing to judge.
       if (!tweet.text && !tweet.quotedText) return;
 
@@ -173,9 +180,9 @@ export default defineContentScript({
         };
         if (generation !== epoch || ctx.isInvalid) return;
         verdicts = res?.verdicts ?? [];
-        if (res?.error) console.warn('[x-anti-slop]', res.error);
+        if (res?.error) console.warn('[x-anti-slop]', redactSecrets(res.error));
       } catch (err) {
-        console.warn('[x-anti-slop] classify failed', err);
+        console.warn('[x-anti-slop] classify failed', errorText(err));
         if (generation !== epoch || ctx.isInvalid) return;
       }
 
@@ -186,7 +193,7 @@ export default defineContentScript({
         const verdict = byId.get(tweet.id);
         if (!verdict || verdict.error) {
           // Failing open: a post is never hidden because the API broke.
-          if (verdict?.error) console.warn('[x-anti-slop]', verdict.error);
+          if (verdict?.error) console.warn('[x-anti-slop]', redactSecrets(verdict.error));
           unmaskById(tweet.id);
           continue;
         }
@@ -295,6 +302,21 @@ export default defineContentScript({
     }
   },
 });
+
+/** Settings and key presence from the background worker. The key itself is never included. */
+async function loadTimeline(): Promise<{ settings: Settings; hasKey: boolean }> {
+  const res = (await browser.runtime.sendMessage({ type: 'getPublicSettings' })) as {
+    settings?: Settings;
+    hasKey?: boolean;
+  };
+  if (!res?.settings) throw new Error('Settings unavailable');
+  return { settings: blankKeys(res.settings), hasKey: res.hasKey === true };
+}
+
+function errorText(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return redactSecrets(message);
+}
 
 function toInput(t: Extracted): TweetInput {
   return {

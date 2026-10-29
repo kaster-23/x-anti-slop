@@ -38,7 +38,18 @@ export default function App() {
 
   async function update(patch: Partial<Settings>) {
     setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
-    setSettings(await saveSettings(patch));
+    const saved = await saveSettings(patch);
+    // saveSettings returns settings with the key removed. Keep the value the
+    // input already has; it is the only extension page that edits it.
+    setSettings((prev) =>
+      prev
+        ? {
+            ...saved,
+            typesafeApiKey: patch.typesafeApiKey ?? prev.typesafeApiKey,
+            openrouterApiKey: patch.openrouterApiKey ?? prev.openrouterApiKey,
+          }
+        : saved,
+    );
   }
 
   if (!settings) return <main className="card">Loading…</main>;

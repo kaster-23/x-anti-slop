@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { CUSTOM_PREFIX, PROVIDERS, buildQuestions, customKey, toQuestion } from './provider';
-import { DEFAULT_SETTINGS, isUsable, newCustomFilter } from './defaults';
+import { DEFAULT_SETTINGS, blankKeys, isUsable, newCustomFilter } from './defaults';
 import type { CustomFilter, Settings } from './types';
 
 function filter(fields: Partial<CustomFilter> = {}): CustomFilter {
@@ -15,6 +15,20 @@ function filter(fields: Partial<CustomFilter> = {}): CustomFilter {
 function settingsWith(customFilters: CustomFilter[]): Settings {
   return { ...DEFAULT_SETTINGS, customFilters };
 }
+
+describe('blankKeys', () => {
+  test('clears both provider keys and leaves the other settings', () => {
+    const blank = blankKeys({
+      ...DEFAULT_SETTINGS,
+      typesafeApiKey: 'apikey_secret',
+      openrouterApiKey: 'sk-or-secret',
+      enabled: false,
+    });
+    expect(blank.typesafeApiKey).toBe('');
+    expect(blank.openrouterApiKey).toBe('');
+    expect(blank.enabled).toBe(false);
+  });
+});
 
 describe('default models', () => {
   test('pins the current Jev release instead of a floating alias', () => {

@@ -1,5 +1,5 @@
 import { storage } from '#imports';
-import { DEFAULT_SETTINGS, EMPTY_STATS, clampThreshold } from './defaults';
+import { DEFAULT_SETTINGS, EMPTY_STATS, blankKeys, clampThreshold } from './defaults';
 import type { Settings, Stats } from './types';
 
 export { DEFAULT_SETTINGS, EMPTY_STATS, activeKey } from './defaults';
@@ -43,7 +43,8 @@ export function saveSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = writeQueue.then(async () => {
     const merged = { ...(await loadSettings()), ...patch };
     await settingsStore.setValue(merged);
-    return merged;
+    // Callers other than the options page must not observe the key.
+    return blankKeys(merged);
   });
   writeQueue = next.catch(() => undefined);
   return next;

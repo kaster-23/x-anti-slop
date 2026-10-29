@@ -77,3 +77,8 @@ export const EMPTY_STATS: Stats = {
 export function activeKey(s: Settings): string {
   return s.provider === 'openrouter' ? s.openrouterApiKey : s.typesafeApiKey;
 }
+
+/** Settings safe to hand to a content script or the popup. The key stays in storage. */
+export function blankKeys(settings: Settings): Settings {
+  return { ...settings, typesafeApiKey: '', openrouterApiKey: '' };
+}
