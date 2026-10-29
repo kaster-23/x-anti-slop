@@ -37,9 +37,9 @@ export function RepeatAccountsView({
     <section className="card">
       <h2>Flagged accounts</h2>
       <p className="caption">
-        After an account has this many posts hidden, the next post from that account offers to
-        hide the rest. Mute and block open X&apos;s own confirmation. Nothing is muted or blocked
-        from this page.
+        After an account has this many slop or ad posts hidden, the next post from that account
+        offers to hide the rest. Promoted posts, media, and your own filters do not count. Mute
+        and block open X&apos;s own confirmation. Nothing is muted or blocked from this page.
       </p>
 
       <div className="field">

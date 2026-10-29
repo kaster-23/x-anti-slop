@@ -183,7 +183,7 @@ export default defineContentScript({
       if (local) {
         decided.set(tweet.id, 'local');
         hide(article, tweet.id, local);
-        noteFlaggedHidden(tweet, settings.repeatThreshold);
+        noteFlaggedHidden(tweet, settings.repeatThreshold, local);
         return;
       }
       if (prior === 'local') return;
@@ -247,7 +247,7 @@ export default defineContentScript({
     function applyVerdict(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
       if (verdict.filtered && verdict.reason) {
         hide(article, tweet.id, verdict.reason);
-        noteFlaggedHidden(tweet, settings.repeatThreshold);
+        noteFlaggedHidden(tweet, settings.repeatThreshold, verdict.reason);
       } else unmask(article);
     }
 

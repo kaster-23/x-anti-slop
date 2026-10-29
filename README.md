@@ -98,8 +98,9 @@ policy is in [PRIVACY.md](PRIVACY.md).
 
 ## Repeat accounts
 
-After an account has a few posts hidden (3 by default, changeable on the
-options page), the next post from that account offers to hide the rest of them.
+After an account has a few slop or ad posts hidden (3 by default, changeable
+on the options page), the next post from that account offers to hide the rest
+of them. Promoted posts, media, and your own filters are not counted.
 That list stays on this device. Mute and Block open X's own confirmation and
 do nothing until you confirm there. The options page lists flagged accounts so
 you can reset a count or undo an auto-hide.

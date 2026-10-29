@@ -15,6 +15,7 @@ import {
   isAutoHidden,
   listFlaggedAccounts,
   normalizeRepeatState,
+  countsAsRepeatOffense,
   recordFlaggedPost,
   resetCount,
   setAutoHide,
@@ -31,6 +32,37 @@ function flag(state: RepeatState, handle: string, postId: string, displayName = 
 function suggestBeforeRecording(state: RepeatState, handle: string, threshold: number): boolean {
   return shouldSuggest(findAccount(state, handle), threshold);
 }
+
+describe('what raises the repeat-offender count', () => {
+  test('counts a Jev slop or ad verdict and a local slop prefilter hit, and ignores the other hides', () => {
+    for (const reason of [
+      'AI slop (92%)',
+      'Ad (88%)',
+      'Promotional (71%)',
+      'Hashtag spam (6)',
+      'Emoji spam (10)',
+      'Link dump (4)',
+      'Shouting',
+    ]) {
+      expect(countsAsRepeatOffense(reason)).toBe(true);
+    }
+
+    for (const reason of [
+      'Promoted',
+      'Image post',
+      'Video post',
+      'GIF post',
+      'Rage bait (80%)',
+      'Low quality (1.0/3)',
+      'Crypto talk (90%)',
+      'keyword: newsletter',
+      'Blocked account',
+      'Auto-hidden · @bob',
+    ]) {
+      expect(countsAsRepeatOffense(reason)).toBe(false);
+    }
+  });
+});
 
 describe('repeat threshold', () => {
   test('defaults to 3 and is the settings default', () => {

@@ -1,6 +1,7 @@
 import { TWEET_SELECTOR } from '@/lib/extract';
 import {
   autoHideReason,
+  countsAsRepeatOffense,
   dismissSuggestion,
   findAccount,
   isAutoHidden,
@@ -84,14 +85,16 @@ export function mountAccountSuggestion(article: HTMLElement, author: string, thr
 }
 
 /**
- * A post was flagged hidden. Auto-hides do not come through here.
- * Model verdicts arrive after the scan that rendered the following post, so
- * once the count crosses, that following post is updated in place.
+ * A post was hidden for slop or ads. Promoted, media, and other filters are
+ * ignored. Model verdicts arrive after the scan that rendered the following
+ * post, so once the count crosses, that following post is updated in place.
  */
 export function noteFlaggedHidden(
   tweet: { id: string; author: string; authorName: string },
   threshold: number,
+  reason: string,
 ): void {
+  if (!countsAsRepeatOffense(reason)) return;
   const handle = normalizeHandle(tweet.author);
   const before = shouldSuggest(findAccount(state, handle), threshold);
   commit((current) =>
@@ -174,7 +177,7 @@ function renderSuggestion(account: FlaggedAccount, article: HTMLElement): HTMLEl
 
   const copy = document.createElement('p');
   copy.className = 'ct-suggest-copy';
-  copy.textContent = `@${account.handle} has had ${account.count} posts hidden. Hide the rest from this account?`;
+  copy.textContent = `@${account.handle} has had ${account.count} slop or ad posts hidden. Hide the rest from this account?`;
 
   const actions = document.createElement('div');
   actions.className = 'ct-suggest-actions';

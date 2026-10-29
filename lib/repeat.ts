@@ -1,10 +1,34 @@
 /**
- * Local memory of accounts whose posts keep getting hidden.
+ * Local memory of accounts that keep posting slop.
  *
- * Counts live in extension storage, capped so a long-lived profile cannot grow
- * the record without bound. Nothing here talks to X: auto-hide is a local
- * decision, and mute or block stays in X's own confirmation sheet.
+ * A hide counts only for a Jev slop or ad verdict, or for the on-device slop
+ * prefilter (hashtag, emoji, link, and shout counts). Promoted posts, media,
+ * rage bait, quality, and filters the user wrote do not. Counts live in
+ * extension storage, capped so a long-lived profile cannot grow the record
+ * without bound. Nothing here talks to X: auto-hide is a local decision, and
+ * mute or block stays in X's own confirmation sheet.
  */
+
+/**
+ * Display labels, without the parenthetical score. Jev uses "AI slop", "Ad"
+ * (engagement-bait that scores as an ad), and "Promotional" (the ads signal).
+ * The local prefilter uses the count-scorer labels.
+ */
+const REPEAT_OFFENSE_LABELS = new Set([
+  'AI slop',
+  'Ad',
+  'Promotional',
+  'Hashtag spam',
+  'Emoji spam',
+  'Link dump',
+  'Shouting',
+]);
+
+/** True when this hide should raise the account's repeat-offender count. */
+export function countsAsRepeatOffense(reason: string): boolean {
+  const label = reason.trim().replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return REPEAT_OFFENSE_LABELS.has(label);
+}
 
 export const DEFAULT_REPEAT_THRESHOLD = 3;
 export const REPEAT_THRESHOLD_MIN = 1;
