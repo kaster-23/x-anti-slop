@@ -1,4 +1,4 @@
-import { PRESETS, presetName, type Preset } from '@/lib/presets';
+import { nextPresetIndex, PRESETS, presetName, type Preset } from '@/lib/presets';
 import type { PresetId } from '@/lib/types';
 
 export function PresetPicker({
@@ -6,57 +6,62 @@ export function PresetPicker({
   presetBase,
   onSelect,
   onReset,
-  variant = 'cards',
+  undoName,
+  onUndo,
+  variant = 'list',
 }: {
   preset: PresetId | 'custom';
   presetBase: PresetId;
   onSelect: (id: PresetId) => void;
   onReset: () => void;
-  variant?: 'cards' | 'compact';
+  /** Set after a preset replaces Custom, so the previous knobs can be restored. */
+  undoName?: string | null;
+  onUndo?: () => void;
+  variant?: 'list' | 'compact';
 }) {
   const baseName = presetName(presetBase);
-  const order = PRESETS.map((item) => item.id);
 
-  function move(event: React.KeyboardEvent<HTMLDivElement>) {
-    const index = preset === 'custom' ? -1 : order.indexOf(preset);
-    let next: number;
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (index + 1) % order.length;
-    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-      next = index <= 0 ? order.length - 1 : index - 1;
-    } else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = order.length - 1;
-    else return;
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    const buttons = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[data-preset]'),
+    );
+    if (buttons.length === 0) return;
+    const active = buttons.findIndex((button) => button === document.activeElement);
+    const checked = buttons.findIndex((button) => button.getAttribute('aria-checked') === 'true');
+    const index = active >= 0 ? active : Math.max(0, checked);
+    const next = nextPresetIndex(buttons.length, index, event.key);
+    if (next === null) return;
     event.preventDefault();
-    const id = order[next];
-    if (!id) return;
-    onSelect(id);
-    const button = event.currentTarget.querySelector(`[data-preset="${id}"]`);
-    if (button instanceof HTMLButtonElement) button.focus();
+    buttons[next]?.focus();
   }
 
   return (
     <div className={`preset-block ${variant}`}>
       {preset === 'custom' ? (
         <div className="custom-banner">
-          <p>
-            Custom (based on {baseName})
-          </p>
+          <p>Custom (based on {baseName})</p>
           <button type="button" onClick={onReset}>
             Reset to {baseName}
           </button>
         </div>
       ) : (
-        variant === 'cards' && (
-          <p className="hint">
-            Move any filter below and this becomes Custom (based on {presetName(preset)}).
-          </p>
+        variant === 'list' && (
+          <p className="hint">Changing a filter switches this to Custom (based on {baseName}).</p>
         )
       )}
+      {undoName && onUndo && (
+        <p className="undo-line">
+          {undoName} applied.{' '}
+          <button type="button" className="text-btn" onClick={onUndo}>
+            Undo
+          </button>
+        </p>
+      )}
       <div
-        className={variant === 'cards' ? 'preset-grid' : 'preset-switch'}
+        className={variant === 'list' ? 'preset-list' : 'preset-switch'}
         role="radiogroup"
         aria-label="Presets"
-        onKeyDown={move}
+        onKeyDown={onKeyDown}
       >
         {PRESETS.map((item) => (
           <PresetOption
@@ -83,24 +88,21 @@ function PresetOption({
   preset: Preset;
   selected: boolean;
   tabStop: boolean;
-  variant: 'cards' | 'compact';
+  variant: 'list' | 'compact';
   onSelect: (id: PresetId) => void;
 }) {
   return (
     <button
       type="button"
-      className="preset"
+      className="preset-row"
       role="radio"
       data-preset={preset.id}
       aria-checked={selected}
       tabIndex={tabStop ? 0 : -1}
       onClick={() => onSelect(preset.id)}
     >
-      <span className="preset-name">
-        {preset.name}
-        {preset.id === 'balanced' && variant === 'cards' && <span className="pill">Default</span>}
-      </span>
-      {variant === 'cards' ? (
+      <span className="preset-name">{preset.name}</span>
+      {variant === 'list' ? (
         <span className="preset-desc">{preset.description}</span>
       ) : (
         <span className="sr-only">{preset.description}</span>

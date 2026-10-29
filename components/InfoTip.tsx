@@ -1,8 +1,9 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 /**
- * A short explanation that opens on hover and on keyboard focus.
- * Escape dismisses it until the pointer leaves or focus moves on.
+ * Explanation that opens on hover and on keyboard focus.
+ * Escape dismisses it, including when it was opened by hover, until the
+ * pointer leaves or focus moves on.
  */
 export function InfoTip({
   label,
@@ -27,6 +28,17 @@ export function InfoTip({
   const [focus, setFocus] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const open = !dismissed && (forceOpen || hover || focus);
+
+  useEffect(() => {
+    if (!hover && !focus) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setDismissed(true);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [hover, focus]);
 
   return (
     <span
@@ -64,7 +76,7 @@ export function InfoTip({
           }
         }}
       >
-        <InfoIcon />
+        i
       </button>
       {open && (
         <span role="tooltip" id={tipId} className="tip-pop">
@@ -73,15 +85,5 @@ export function InfoTip({
         </span>
       )}
     </span>
-  );
-}
-
-function InfoIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-      <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M8 7.15V11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <circle cx="8" cy="4.85" r="0.8" fill="currentColor" />
-    </svg>
   );
 }

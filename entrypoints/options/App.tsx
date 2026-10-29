@@ -19,14 +19,16 @@ import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/Labeled
 import { PresetPicker } from '@/components/PresetPicker';
 import { loadSettings, saveSettings } from '@/lib/settings';
 import { activeKey } from '@/lib/defaults';
-import { presetChangePatch, presetPatch } from '@/lib/presets';
+import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
 import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import { parseHandleList } from '@/lib/prefilter';
 import { REPEAT_THRESHOLD_MAX, REPEAT_THRESHOLD_MIN } from '@/lib/repeat';
 import CustomFilters from './CustomFilters';
 import RepeatAccounts from './RepeatAccounts';
 import { SlopAdvanced, SlopBuckets } from './SlopTuning';
-import type { HideMode, MediaFilterId, ProviderId, Settings, SignalId, Stats } from '@/lib/types';
+import type { HideMode, MediaFilterId, PresetId, ProviderId, Settings, SignalId, Stats } from '@/lib/types';
+
+type UndoState = { name: string; patch: Partial<Settings> };
 
 const PROVIDER_IDS = Object.keys(PROVIDERS) as ProviderId[];
 const SIGNAL_IDS: SignalId[] = ['slop', 'ragebait', 'ads'];
@@ -46,6 +48,7 @@ export default function App() {
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const [allowlistText, setAllowlistText] = useState('');
   const [blocklistText, setBlocklistText] = useState('');
+  const [undo, setUndo] = useState<UndoState | null>(null);
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -63,9 +66,10 @@ export default function App() {
       .catch(() => {});
   }
 
-  async function update(patch: Partial<Settings>) {
+  async function update(patch: Partial<Settings>, kind: 'edit' | 'preset' | 'undo' = 'edit') {
     if (!settings) return;
-    const nextPatch = presetChangePatch(settings, patch);
+    if (kind === 'edit') setUndo(null);
+    const nextPatch = kind === 'undo' ? patch : presetChangePatch(settings, patch);
     setSettings((prev) => (prev ? { ...prev, ...nextPatch } : prev));
     const saved = await saveSettings(nextPatch);
     // saveSettings returns settings with the key removed. Keep the value the
@@ -79,6 +83,21 @@ export default function App() {
           }
         : saved,
     );
+  }
+
+  function choosePreset(id: PresetId) {
+    if (!settings) return;
+    if (settings.preset === 'custom') {
+      setUndo({ name: presetName(id), patch: customSnapshot(settings) });
+    }
+    void update(presetPatch(id), 'preset');
+  }
+
+  function undoPreset() {
+    if (!undo) return;
+    const patch = undo.patch;
+    setUndo(null);
+    void update(patch, 'undo');
   }
 
   if (!settings) {
@@ -114,10 +133,9 @@ export default function App() {
       <header className="mast">
         <div>
           <h1>X-AntiSlop</h1>
-          <p className="lede">Hides AI slop, rage bait, and ads on X. Start from a preset, then change only what you want.</p>
+          <p className="lede">Hides slop, rage bait, and ads on X.</p>
         </div>
         <p className={`status${hasKey ? ' is-on' : ''}`} role="status">
-          <span className="status-dot" aria-hidden="true" />
           {hasKey ? 'Key connected' : 'No API key'}
         </p>
       </header>
@@ -125,23 +143,22 @@ export default function App() {
       <section className="panel" aria-labelledby="preset-heading">
         <div className="panel-head">
           <h2 id="preset-heading">Preset</h2>
-          <p className="hint">Each card sets every filter knob. Balanced is what a new install starts on.</p>
+          <p className="hint">Balanced is the default.</p>
         </div>
         <PresetPicker
           preset={settings.preset}
           presetBase={settings.presetBase}
-          onSelect={(id) => update(presetPatch(id))}
+          onSelect={choosePreset}
           onReset={() => update(presetPatch(settings.presetBase))}
+          undoName={undo?.name}
+          onUndo={undoPreset}
         />
       </section>
 
       <section className="panel" id="filters" aria-labelledby="filters-heading">
         <div className="panel-head">
           <h2 id="filters-heading">Filters</h2>
-          <p className="hint">
-            Left is relaxed, right is strict. The number is the confidence required before a post
-            is hidden.
-          </p>
+          <p className="hint">Left is relaxed. Right is strict. The number is the confidence required to hide.</p>
         </div>
 
         {SIGNAL_IDS.map((id) => {
@@ -196,7 +213,7 @@ export default function App() {
           })}
         </div>
 
-        <div style={{ marginTop: 18 }}>
+        <div className="mt-18">
           <LabeledSlider
             id="repeat-threshold"
             label={REPEAT_HELP.label}
@@ -216,22 +233,19 @@ export default function App() {
         </div>
 
         <h3 className="group-label">Writing-style buckets</h3>
-        <p className="hint">
-          A bucket can hide a post on its own when its strongest tell clears the bar, even if the
-          combined slop score does not.
-        </p>
-        <div style={{ marginTop: 12 }}>
+        <p className="hint">A bucket hides a post when its strongest tell clears this bar.</p>
+        <div className="mt-12">
           <SlopBuckets settings={settings} onChange={update} />
         </div>
 
         <details className="advanced">
           <summary>
             <span className="summary-row">Advanced</span>
-            <span className="hint">Reply bar, quality, marks, and your own questions</span>
+            <span className="hint">Reply bar, quality, marks, questions</span>
           </summary>
           <div className="advanced-body">
             <SlopAdvanced settings={settings} onChange={update} />
-            <div style={{ marginTop: 16 }}>
+            <div className="mt-16">
               <LabeledSlider
                 id="quality"
                 label={QUALITY_HELP.label}
@@ -250,12 +264,12 @@ export default function App() {
                 onChange={(minQuality) => update({ minQuality })}
               />
               {settings.minQuality > 0 && (
-                <p className="hint" style={{ marginTop: 6 }}>
+                <p className="hint mt-6">
                   Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
                 </p>
               )}
             </div>
-            <div style={{ marginTop: 16 }}>
+            <div className="mt-16">
               <ToggleRow
                 id="hide-until"
                 label={HIDE_UNTIL_HELP.label}
@@ -266,7 +280,7 @@ export default function App() {
                 onChange={(hideUntilChecked) => update({ hideUntilChecked })}
               />
             </div>
-            <div style={{ marginTop: 18 }}>
+            <div className="mt-18">
               <CustomFilters
                 filters={settings.customFilters}
                 onChange={(customFilters) => update({ customFilters })}
@@ -279,7 +293,7 @@ export default function App() {
       <section className="panel lists" aria-labelledby="lists-heading">
         <div className="panel-head">
           <h2 id="lists-heading">Lists</h2>
-          <p className="hint">Accounts you always show, accounts you always hide, and ones the timeline has flagged.</p>
+          <p className="hint">Allow list, block list, and flagged accounts.</p>
         </div>
 
         <h3>
@@ -296,7 +310,7 @@ export default function App() {
           onChange={(e) => setAllowlistText(e.target.value)}
           onBlur={() => update({ allowlist: parseHandleList(allowlistText) })}
         />
-        <p className="hint" style={{ marginTop: 6 }}>One handle per line. These accounts skip every filter.</p>
+        <p className="hint mt-6">One handle per line. These accounts skip every filter.</p>
 
         <h3>
           <span className="field-label">
@@ -312,13 +326,13 @@ export default function App() {
           onChange={(e) => setBlocklistText(e.target.value)}
           onBlur={() => update({ blocklist: parseHandleList(blocklistText) })}
         />
-        <p className="hint" style={{ marginTop: 6 }}>
+        <p className="hint mt-6">
           One handle per line. These accounts are hidden, and the post is not sent to the model.
           Posts under five words stay visible without a model call. Hashtag piles, emoji piles,
           link dumps, and all-caps shouting are hidden on this device.
         </p>
 
-        <div style={{ marginTop: 18 }}>
+        <div className="mt-18">
           <RepeatAccounts threshold={settings.repeatThreshold} />
         </div>
       </section>
@@ -349,7 +363,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <p className="hint" style={{ marginTop: 8 }}>
+          <p className="hint mt-8">
             {HIDE_MODES.find((mode) => mode.id === settings.hideMode)?.hint}
           </p>
         </div>
@@ -403,16 +417,16 @@ export default function App() {
                 update({ [keyField]: e.target.value.trim() } as Partial<Settings>);
               }}
             />
-            <button type="button" onClick={runTest} disabled={!apiKey || test.status === 'testing'}>
+            <button type="button" className="primary" onClick={runTest} disabled={!apiKey || test.status === 'testing'}>
               {test.status === 'testing' ? 'Testing…' : 'Test'}
             </button>
           </div>
-          <p className="hint" style={{ marginTop: 6 }}>
-            {test.status === 'ok' && <span className="status-ok">{test.message}</span>}
+          <p className="hint mt-6">
+            {test.status === 'ok' && <span>{test.message}</span>}
             {test.status === 'error' && <span className="status-err">{test.message}</span>}
             {test.status !== 'ok' && test.status !== 'error' && (
               <>
-                Stored locally in this browser and sent only to {provider.name}.{' '}
+                Stored in this browser. Sent only to {provider.name}.{' '}
                 <a href={provider.keysUrl} target="_blank" rel="noreferrer">
                   Get a key
                 </a>
@@ -439,7 +453,7 @@ export default function App() {
             value={settings.model}
             onChange={(e) => update({ model: e.target.value })}
           />
-          <p className="hint" style={{ marginTop: 6 }}>Leave blank to use the default.</p>
+          <p className="hint mt-6">Blank uses the default.</p>
         </div>
       </section>
 
@@ -447,7 +461,7 @@ export default function App() {
         <section className="panel" aria-labelledby="usage-heading">
           <div className="panel-head">
             <h2 id="usage-heading">Usage</h2>
-            <p className="hint">Running totals since the counters were last reset. They are not broken out by day.</p>
+            <p className="hint">Since the last reset. Not split by day.</p>
           </div>
           <div className="stats-grid">
             <div className="stat">
@@ -468,14 +482,14 @@ export default function App() {
             </div>
           </div>
           {Object.keys(stats.bySignal).length > 0 && (
-            <p className="hint" style={{ marginTop: 10 }}>
+            <p className="hint mt-10">
               {Object.entries(stats.bySignal)
                 .sort((a, b) => b[1] - a[1])
                 .map(([label, n]) => `${label}: ${n}`)
                 .join(' · ')}
             </p>
           )}
-          <div className="row wrap" style={{ marginTop: 14 }}>
+          <div className="row wrap mt-14">
             <button
               type="button"
               onClick={async () => {
