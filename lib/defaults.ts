@@ -1,6 +1,7 @@
 /** Free of extension-runtime imports, so build scripts and the eval harness
  *  can use these outside the browser. */
 import { djb2 } from './hash';
+import { DEFAULT_REPEAT_THRESHOLD } from './repeat';
 import type { CustomFilter, Settings, Stats } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideMode: 'collapse',
   hideUntilChecked: false,
   allowlist: [],
+  repeatThreshold: DEFAULT_REPEAT_THRESHOLD,
 };
 
 /**

@@ -71,6 +71,13 @@ accessible to the developer.
   capped at 5,000 entries, so the same post is never sent twice
 - **Counters** — how many posts have been checked and filtered, and the
   resulting token spend
+- **Flagged accounts** — the handle, display name, how many of that account's
+  posts were hidden, and whether you chose to auto-hide them. At most 200
+  accounts are kept, along with the 50 most recent hidden post ids for each,
+  so the same post is not counted twice. This is used only to suggest hiding
+  a repeat source. It is never sent to the provider. Mute and block, when you
+  choose them, are X's own confirmation screens; the extension does not
+  confirm them.
 - **The most recent API error**, so a failure can be shown in the popup
 
 Your API key is stored locally, is never logged, and is sent only to the

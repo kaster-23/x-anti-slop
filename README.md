@@ -95,6 +95,14 @@ policy is in [PRIVACY.md](PRIVACY.md).
 - Promoted posts
 - Images, videos, or GIFs, if you turn those on
 
+## Repeat accounts
+
+After an account has a few posts hidden (3 by default, changeable on the
+options page), the next post from that account offers to hide the rest of them.
+That list stays on this device. Mute and Block open X's own confirmation and
+do nothing until you confirm there. The options page lists flagged accounts so
+you can reset a count or undo an auto-hide.
+
 ## Development
 
 ```bash
@@ -122,12 +130,13 @@ PROVIDER=openrouter OPENROUTER_API_KEY=… pnpm eval
 lib/provider.ts    TypeSafe and OpenRouter calls, questions, retry
 lib/classifier.ts  verdict cache, concurrency, thresholds
 lib/extract.ts     reading posts out of X's DOM
+lib/repeat.ts      flagged-account counts and local auto-hide
 lib/settings.ts    extension local storage
 entrypoints/
   background.ts    holds the key and is the only caller of the API
   content/         watches the timeline and applies verdicts
   popup/           toggles
-  options/         provider, key, filters
+  options/         provider, key, filters, flagged accounts
 ```
 
 ## License

@@ -1,5 +1,6 @@
 import { storage } from '#imports';
 import { DEFAULT_SETTINGS, EMPTY_STATS, clampThreshold } from './defaults';
+import { clampRepeatThreshold } from './repeat';
 import type { Settings, Stats } from './types';
 
 export { DEFAULT_SETTINGS, EMPTY_STATS, activeKey } from './defaults';
@@ -29,6 +30,7 @@ export async function loadSettings(): Promise<Settings> {
   for (const cfg of Object.values(merged.signals)) {
     cfg.threshold = clampThreshold(cfg.threshold);
   }
+  merged.repeatThreshold = clampRepeatThreshold(merged.repeatThreshold);
   return merged;
 }
 
@@ -42,6 +44,7 @@ let writeQueue: Promise<unknown> = Promise.resolve();
 export function saveSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = writeQueue.then(async () => {
     const merged = { ...(await loadSettings()), ...patch };
+    merged.repeatThreshold = clampRepeatThreshold(merged.repeatThreshold);
     await settingsStore.setValue(merged);
     return merged;
   });

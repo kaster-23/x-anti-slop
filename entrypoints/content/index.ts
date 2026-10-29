@@ -4,6 +4,13 @@ import { loadSettings } from '@/lib/settings';
 import { activeCustomFilters } from '@/lib/provider';
 import { activeKey } from '@/lib/defaults';
 import type { Settings, TweetInput, Verdict } from '@/lib/types';
+import {
+  autoHiddenReason,
+  mountAccountSuggestion,
+  noteFlaggedHidden,
+  startOffenders,
+  tagAuthor,
+} from './offenders';
 import './style.css';
 
 /**
@@ -36,6 +43,15 @@ export default defineContentScript({
     const revealed = new Set<string>();
     const queue = new Map<string, TweetInput>();
     let flushTimer: number | undefined;
+
+    await startOffenders({
+      rescan: () => {
+        decided.clear();
+        queue.clear();
+        resetAll();
+        scan();
+      },
+    });
 
     browser.runtime.onMessage.addListener((message: { type: string }) => {
       if (message.type !== 'settingsChanged') return;
@@ -87,12 +103,29 @@ export default defineContentScript({
         // previous post's reason, and a Show handler closed over the previous
         // id, so the cell has to be stripped before this post is decided.
         delete article.dataset.ctState;
+        delete article.dataset.ctAuthor;
         clearCell(cellOf(article));
       }
 
       article.dataset.ctId = tweet.id;
+      if (isAllowlisted(tweet.author, settings)) {
+        delete article.dataset.ctAuthor;
+        return;
+      }
+      tagAuthor(article, tweet.author);
+
+      // Local decision, before the model and before this post is counted, so
+      // the suggestion lands on the following post rather than the one that
+      // crossed the threshold.
+      const autoReason = autoHiddenReason(tweet.author);
+      if (autoReason) {
+        decided.set(tweet.id, 'local');
+        hide(article, tweet.id, autoReason);
+        return;
+      }
+      mountAccountSuggestion(article, tweet.author, settings.repeatThreshold);
+
       if (revealed.has(tweet.id)) return;
-      if (isAllowlisted(tweet.author, settings)) return;
 
       const prior = decided.get(tweet.id);
       if (prior && prior !== 'local') {
@@ -104,6 +137,7 @@ export default defineContentScript({
       if (local) {
         decided.set(tweet.id, 'local');
         hide(article, tweet.id, local);
+        noteFlaggedHidden(tweet, settings.repeatThreshold);
         return;
       }
       if (prior === 'local') return;
@@ -158,8 +192,10 @@ export default defineContentScript({
     }
 
     function applyVerdict(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
-      if (verdict.filtered && verdict.reason) hide(article, tweet.id, verdict.reason);
-      else unmask(article);
+      if (verdict.filtered && verdict.reason) {
+        hide(article, tweet.id, verdict.reason);
+        noteFlaggedHidden(tweet, settings.repeatThreshold);
+      } else unmask(article);
     }
 
     /** The timeline cell wrapping a post; hiding this removes the gap too. */
@@ -195,6 +231,7 @@ export default defineContentScript({
     function clearCell(cell: HTMLElement) {
       cell.classList.remove('ct-pending', 'ct-collapsed', 'ct-blurred', 'ct-removed');
       cell.querySelector('.ct-placeholder')?.remove();
+      cell.querySelector('.ct-suggest')?.remove();
     }
 
     function unmaskById(id: string) {
@@ -237,9 +274,10 @@ export default defineContentScript({
       )) {
         clearCell(cell);
       }
-      for (const node of document.querySelectorAll('.ct-placeholder')) node.remove();
+      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest')) node.remove();
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
         delete article.dataset.ctState;
+        delete article.dataset.ctAuthor;
       }
     }
   },
