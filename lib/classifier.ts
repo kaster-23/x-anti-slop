@@ -48,6 +48,8 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<Verdict>>();
+let nextSeq = 0;
+const committedSeq = new Map<string, number>();
 let cacheLoading: Promise<void> | undefined;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -85,6 +87,7 @@ async function flushCache() {
 
 export async function clearCache() {
   cache.clear();
+  committedSeq.clear();
   clearTimeout(flushTimer);
   flushTimer = undefined;
   await cacheStore.setValue({});
@@ -323,7 +326,7 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
  * are not split across requests. Several posts in one state would make the
  * questions ambiguous about which post they refer to.
  */
-async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdict> {
+async function classifyOne(tweet: TweetInput, settings: Settings, seq: number): Promise<Verdict> {
   const post = toSlopPost(tweet);
   const questions = buildQuestions(settings, post);
   if (Object.keys(questions).length === 0) {
@@ -364,8 +367,12 @@ async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdi
     entry.features = features;
   }
 
-  cache.set(tweet.id, entry);
-  scheduleFlush();
+  // A slower request for an older question set must not replace a newer score.
+  if (seq >= (committedSeq.get(tweet.id) ?? 0)) {
+    committedSeq.set(tweet.id, seq);
+    cache.set(tweet.id, entry);
+    scheduleFlush();
+  }
 
   const verdict = decide(tweet.id, entry, settings);
   recordUsage(res.usage?.input_tokens ?? 0, verdict.filtered, verdict.reason);
@@ -384,19 +391,23 @@ export async function classify(
       const hit = cache.get(tweet.id);
       if (hit && hit.sig === sig) return { ...decide(tweet.id, hit, settings), cached: true };
 
-      const pending = inFlight.get(tweet.id);
+      const flightKey = `${tweet.id}\0${sig}`;
+      const pending = inFlight.get(flightKey);
       if (pending) return pending;
 
-      const promise = classifyOne(tweet, settings)
+      const seq = ++nextSeq;
+      const promise = classifyOne(tweet, settings, seq)
         .catch((err): Verdict => ({
           id: tweet.id,
           scores: {},
           filtered: false,
           error: (err as Error).message,
         }))
-        .finally(() => inFlight.delete(tweet.id));
+        .finally(() => {
+          if (inFlight.get(flightKey) === promise) inFlight.delete(flightKey);
+        });
 
-      inFlight.set(tweet.id, promise);
+      inFlight.set(flightKey, promise);
       return promise;
     }),
   );

@@ -389,10 +389,12 @@ async function describeError(res: Response): Promise<string> {
   }
   switch (res.status) {
     case 401:
+      return 'Check your key. The provider rejected it (401).';
     case 403:
-      return 'Invalid API key — check it in the extension settings.';
+      return 'The provider refused this key (403).';
     case 422:
-      return `Request rejected: ${detail || 'validation failed'}`;
+      console.error('[x-anti-slop] 422 from Jev. This is a bug in the request, not the key.');
+      return 'The filter request was rejected (422). This is a bug in the extension, not your key.';
     case 429:
       return 'Rate limited by the provider. Slow down or try again shortly.';
     default:

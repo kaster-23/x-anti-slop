@@ -77,6 +77,7 @@ describe('slop score', () => {
     expect(hardRule(features, blind)).toBeNull();
     expect(features.unprompted_pivot).toBeGreaterThan(0);
     expect(hardRule(features, { text: blind.text })?.id).toBe('unprompted_pivot');
+    expect(judgeSlop(features, DEFAULT_WEIGHTS, blind, thresholds()).filtered).toBe(false);
   });
 
   test('a confident human tell vetoes a hard rule', () => {
