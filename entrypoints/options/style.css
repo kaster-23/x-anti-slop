@@ -199,3 +199,20 @@ button.danger:hover:not(:disabled) {
   color: var(--danger);
   border-color: var(--danger);
 }
+
+input.threshold-input {
+  width: 88px;
+}
+
+.account {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.accounts .account:first-child {
+  margin-top: 14px;
+}

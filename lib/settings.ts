@@ -1,6 +1,7 @@
 import { storage } from '#imports';
 import { DEFAULT_SETTINGS, EMPTY_STATS, blankKeys, clampThreshold } from './defaults';
 import { SLOP_CATEGORIES, resolveWeights } from './detect/score';
+import { clampRepeatThreshold } from './repeat';
 import type { Settings, Stats } from './types';
 
 export { DEFAULT_SETTINGS, EMPTY_STATS, activeKey } from './defaults';
@@ -44,6 +45,7 @@ export async function loadSettings(): Promise<Settings> {
   merged.replyBotThreshold = clampThreshold(
     stored?.replyBotThreshold ?? DEFAULT_SETTINGS.replyBotThreshold,
   );
+  merged.repeatThreshold = clampRepeatThreshold(merged.repeatThreshold);
   return merged;
 }
 
@@ -57,6 +59,7 @@ let writeQueue: Promise<unknown> = Promise.resolve();
 export function saveSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = writeQueue.then(async () => {
     const merged = { ...(await loadSettings()), ...patch };
+    merged.repeatThreshold = clampRepeatThreshold(merged.repeatThreshold);
     await settingsStore.setValue(merged);
     // Callers other than the options page must not observe the key.
     return blankKeys(merged);

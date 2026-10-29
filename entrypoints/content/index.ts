@@ -11,6 +11,13 @@ import {
   prefetchRootMargin,
 } from '@/lib/viewport';
 import { mountMeter } from './meter';
+import {
+  autoHiddenReason,
+  mountAccountSuggestion,
+  noteFlaggedHidden,
+  startOffenders,
+  tagAuthor,
+} from './offenders';
 import './style.css';
 
 /**
@@ -55,6 +62,7 @@ export default defineContentScript({
      *  captured the previous value and must not apply it afterwards. */
     let epoch = 0;
     let ready = false;
+    let stopOffenders = () => {};
 
     const meterVisible = () => ready && settings.enabled && !onExcludedRoute();
 
@@ -128,6 +136,21 @@ export default defineContentScript({
     let resizeTimer: number | undefined;
     window.addEventListener('resize', onResize);
 
+    try {
+      stopOffenders = await startOffenders({
+        rescan: () => {
+          decided.clear();
+          outbound.clear();
+          resetAll();
+          scan();
+        },
+      });
+    } catch (err) {
+      // Repeat-offender memory is optional. A storage failure leaves posts visible
+      // to the rest of the filter instead of stopping the content script.
+      console.warn('[x-anti-slop] repeat-offender memory unavailable', err);
+    }
+
     // A re-injected script (extension reload or update) invalidates this
     // context. Without the disconnect, the old observer and listener keep
     // running beside the new ones for the rest of the tab.
@@ -137,6 +160,7 @@ export default defineContentScript({
       window.removeEventListener('resize', onResize);
       browser.runtime.onMessage.removeListener(onMessage);
       meter.remove();
+      stopOffenders();
     });
 
     await applySettings(++epoch);
@@ -172,7 +196,7 @@ export default defineContentScript({
     }
 
     function scan() {
-      if (ctx.isInvalid) return;
+      if (!ready || ctx.isInvalid) return;
       meter.setVisible(meterVisible());
       if (!settings.enabled || onExcludedRoute()) return;
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
@@ -209,10 +233,37 @@ export default defineContentScript({
         // previous post's reason, and a Show handler closed over the previous
         // id, so the cell has to be stripped before this post is decided.
         delete article.dataset.ctState;
+        delete article.dataset.ctAuthor;
         clearCell(cellOf(article));
       }
 
       article.dataset.ctId = tweet.id;
+      const decision = prefilter(toPrefilter(tweet), settings);
+      if (decision.action === 'show' && decision.reason === 'Allowlisted') {
+        delete article.dataset.ctAuthor;
+        decided.set(tweet.id, 'local');
+        unmask(article);
+        noteLocal(tweet.id, false, decision.reason);
+        return;
+      }
+      tagAuthor(article, tweet.author);
+
+      // Local decision, before the model and before this post is counted, so
+      // the suggestion lands on the following post rather than the one that
+      // crossed the threshold.
+      const autoReason = autoHiddenReason(tweet.author);
+      if (autoReason) {
+        decided.set(tweet.id, 'local');
+        hide(article, toInput(tweet), {
+          id: tweet.id,
+          scores: {},
+          filtered: true,
+          reason: autoReason,
+        });
+        return;
+      }
+      mountAccountSuggestion(article, tweet.author, settings.repeatThreshold);
+
       if (revealed.has(tweet.id)) {
         article.dataset.ctState = 'revealed';
         return;
@@ -227,7 +278,6 @@ export default defineContentScript({
         return;
       }
 
-      const decision = prefilter(toPrefilter(tweet), settings);
       if (decision.action !== 'model') {
         decided.set(tweet.id, 'local');
         if (decision.action === 'hide') {
@@ -237,6 +287,7 @@ export default defineContentScript({
             filtered: true,
             reason: decision.reason,
           });
+          noteFlaggedHidden(tweet, settings.repeatThreshold, decision.reason);
         } else {
           unmask(article);
         }
@@ -293,6 +344,19 @@ export default defineContentScript({
       const byId = new Map(verdicts.map((v) => [v.id, v]));
       for (const tweet of tweets) {
         inflightIds.delete(tweet.id);
+        const autoReason = autoHiddenReason(tweet.author);
+        if (autoReason) {
+          decided.set(tweet.id, 'local');
+          for (const article of articlesFor(tweet.id)) {
+            hide(article, tweet, {
+              id: tweet.id,
+              scores: {},
+              filtered: true,
+              reason: autoReason,
+            });
+          }
+          continue;
+        }
         const verdict = byId.get(tweet.id);
         if (!verdict || verdict.error) {
           // Failing open: a post is never hidden because the API broke.
@@ -318,8 +382,10 @@ export default defineContentScript({
     }
 
     function applyVerdict(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
-      if (verdict.filtered && verdict.reason) hide(article, tweet, verdict);
-      else {
+      if (verdict.filtered && verdict.reason) {
+        hide(article, tweet, verdict);
+        noteFlaggedHidden(tweet, settings.repeatThreshold, verdict.reason);
+      } else {
         unmask(article);
         mountLabels(article, tweet, verdict, settings.labeling);
       }
@@ -361,6 +427,7 @@ export default defineContentScript({
     function clearCell(cell: HTMLElement) {
       cell.classList.remove('ct-pending', 'ct-collapsed', 'ct-blurred', 'ct-removed');
       cell.querySelector('.ct-placeholder')?.remove();
+      cell.querySelector('.ct-suggest')?.remove();
       cell.querySelector('.ct-labelbar')?.remove();
     }
 
@@ -420,9 +487,12 @@ export default defineContentScript({
       )) {
         clearCell(cell);
       }
-      for (const node of document.querySelectorAll('.ct-placeholder')) node.remove();
+      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest, .ct-labelbar')) {
+        node.remove();
+      }
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
         delete article.dataset.ctState;
+        delete article.dataset.ctAuthor;
       }
     }
 

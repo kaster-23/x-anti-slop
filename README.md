@@ -118,6 +118,15 @@ policy is in [PRIVACY.md](PRIVACY.md).
 - Promoted posts
 - Images, videos, or GIFs, if you turn those on
 
+## Repeat accounts
+
+After an account has a few slop or ad posts hidden (3 by default, changeable
+on the options page), the next post from that account offers to hide the rest
+of them. Promoted posts, media, and your own filters are not counted.
+That list stays on this device. Mute and Block open X's own confirmation and
+do nothing until you confirm there. The options page lists flagged accounts so
+you can reset a count or undo an auto-hide.
+
 ## Development
 
 ```bash
@@ -163,6 +172,7 @@ lib/request-queue.ts concurrency, priority, in-flight dedupe, fail-open
 lib/prefilter.ts     allow/block lists, short posts, promoted and media rules
 lib/heuristics.ts    pluggable on-device counts for obvious cases
 lib/viewport.ts      distance-to-viewport priority and prefetch margin
+lib/repeat.ts        flagged-account counts and local auto-hide
 lib/classifier.ts    verdict cache, slop score, thresholds, stats
 lib/extract.ts       reading posts out of X's DOM
 lib/settings.ts      extension local storage
@@ -170,7 +180,7 @@ entrypoints/
   background.ts      holds the key and is the only caller of the API
   content/           prefetches the timeline, applies verdicts, shows counts
   popup/             toggles and usage
-  options/           provider, key, filters, lists
+  options/           provider, key, filters, lists, flagged accounts
 ```
 
 ## License

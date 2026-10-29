@@ -117,6 +117,7 @@ input[type="range"] {
 
 input[type="text"],
 input[type="password"],
+input[type="number"],
 select,
 textarea {
   width: 100%;

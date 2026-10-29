@@ -73,6 +73,11 @@ export interface Settings {
   allowlist: string[];
   /** Accounts hidden with no model call. Edited by the user, not inferred. */
   blocklist: string[];
+  /**
+   * Hidden posts from one account before the timeline suggests hiding the rest.
+   * The extension never mutes or blocks; those stay on X's own confirmation.
+   */
+  repeatThreshold: number;
 }
 
 export interface TweetInput {
