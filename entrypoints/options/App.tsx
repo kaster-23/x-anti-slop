@@ -87,9 +87,11 @@ export default function App() {
 
   function choosePreset(id: PresetId) {
     if (!settings) return;
-    if (settings.preset === 'custom') {
-      setUndo({ name: presetName(id), patch: customSnapshot(settings) });
-    }
+    setUndo(
+      settings.preset === 'custom'
+        ? { name: presetName(id), patch: customSnapshot(settings) }
+        : null,
+    );
     void update(presetPatch(id), 'preset');
   }
 
@@ -143,7 +145,7 @@ export default function App() {
       <section className="panel" aria-labelledby="preset-heading">
         <div className="panel-head">
           <h2 id="preset-heading">Preset</h2>
-          <p className="hint">Balanced is the default.</p>
+          {settings.preset !== 'custom' && <p className="hint">Balanced is the default.</p>}
         </div>
         <PresetPicker
           preset={settings.preset}

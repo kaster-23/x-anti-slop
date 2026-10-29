@@ -23,9 +23,9 @@ describe('preset picker', () => {
     expect(markup).toContain('Hides clear AI slop, rage bait, ads, and promoted posts.');
     expect(markup).toContain('Hides more slop, rage bait, and ads');
     expect(markup).toContain('Adds model calls and may delay posts');
-    expect(markup).toContain('aria-checked="true"');
+    expect(markup).toContain('aria-pressed="true"');
     expect(markup).toContain('data-preset="balanced"');
-    expect(markup).toContain('Custom (based on Balanced)');
+    expect(markup).not.toContain('role="radio"');
     expect(markup).not.toContain('Reset to');
   });
 
@@ -40,7 +40,7 @@ describe('preset picker', () => {
     );
     expect(markup).toContain('Custom (based on Strict)');
     expect(markup).toContain('Reset to Strict');
-    expect(markup).not.toContain('aria-checked="true"');
+    expect(markup).not.toContain('aria-pressed="true"');
   });
 
   test('offers undo after a preset replaced Custom', () => {
