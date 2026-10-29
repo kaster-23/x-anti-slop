@@ -80,7 +80,14 @@ export default function App() {
         {apiError && (
           <div className="card notice error">
             <div className="row">
-              <span className="grow">{apiError.message}</span>
+              <span className="grow">
+                {apiError.message}{' '}
+                {apiError.message.startsWith('Check your key') && (
+                  <a href="#" onClick={openOptions}>
+                    Open settings
+                  </a>
+                )}
+              </span>
               <button
                 type="button"
                 className="dismiss"

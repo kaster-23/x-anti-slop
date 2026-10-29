@@ -6,7 +6,15 @@
  *   TYPESAFE_API_KEY=... pnpm eval
  *   PROVIDER=openrouter OPENROUTER_API_KEY=... pnpm eval
  */
-import { buildQuestions, buildState, callSystemOne, PROVIDERS, resolveModel } from '../lib/provider';
+import {
+  buildQuestions,
+  buildState,
+  callSystemOne,
+  hidingMatch,
+  PROVIDERS,
+  readScores,
+  resolveModel,
+} from '../lib/provider';
 import { DEFAULT_SETTINGS } from '../lib/defaults';
 import type { ProviderId, Settings, TweetInput } from '../lib/types';
 
@@ -73,24 +81,16 @@ await Promise.all(
     });
     tokens += res.usage?.input_tokens ?? 0;
 
-    const scores: Record<string, number> = {};
-    let quality = 0;
-    for (const [key, answer] of Object.entries(res.answers)) {
-      if (answer.type === 'noul') scores[key] = answer.noul;
-      else quality = answer.score;
-    }
-
-    const hits = Object.entries(settings.signals)
-      .filter(([id, cfg]) => cfg.enabled && (scores[id] ?? 0) >= cfg.threshold)
-      .map(([id]) => id);
-    const filtered = hits.length > 0;
+    const { scores, quality = 0 } = readScores(res.answers);
+    const match = hidingMatch(scores, settings);
+    const filtered = match !== null;
     const ok = filtered === (sample.label === 'junk');
     if (ok) correct++;
 
     rows[i] =
       `${ok ? ' ok ' : 'MISS'}  ${sample.label.padEnd(4)}  ` +
       `slop=${fmt(scores.slop)} rage=${fmt(scores.ragebait)} ad=${fmt(scores.ads)} ` +
-      `q=${quality.toFixed(1)}  ${filtered ? `HIDE[${hits.join(',')}]` : 'keep'}  ` +
+      `q=${quality.toFixed(1)}  ${filtered ? `HIDE[${match?.label}]` : 'keep'}  ` +
       `${sample.tweet.text.replace(/\s+/g, ' ').slice(0, 44)}…`;
   }),
 );

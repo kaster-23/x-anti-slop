@@ -20,24 +20,19 @@ an unexpected response — the post stays visible.
 
 When the extension encounters a post it has not already classified, and you have
 enabled at least one AI-backed filter and supplied an API key, the background
-worker sends the following fields for that post to your selected provider:
+worker sends one text string for that post to your selected provider. The
+string is the post text. When the post quotes another post, the quoted text is
+appended and the whole string is trimmed if the thread or quote chain is very
+long. The request does not include the author's handle, display name, or a
+description of attached media.
 
-| Field | Contents |
-| --- | --- |
-| `author_handle` | The post author's @handle |
-| `author_name` | The post author's display name |
-| `text` | The text of the post |
-| `quoted_post` | The text of a quoted post, when there is one |
-| `attachments` | Whether the post carries an image and/or a video |
-| `is_reply` | Whether the post is a reply |
-
-Alongside these it sends the filter questions themselves and your API key, used
-as a bearer token so the provider can authenticate and bill you.
+Alongside that text it sends the filter questions and your API key, used as a
+bearer token so the provider can authenticate and bill you. Only the background
+worker makes this call.
 
 Nothing else is transmitted. In particular the extension does **not** send:
 
-- **Images, video, or audio.** The model is text-only; media is described only
-  as the words "image" or "video".
+- **Images, video, or audio.** The model is text-only, and media is not described.
 - **Direct messages.** The extension does not run on `/messages`, nor on
   `/settings`. Those routes are excluded in code before any post is read.
 - **Your identity.** No account, no email address, no login, no device or

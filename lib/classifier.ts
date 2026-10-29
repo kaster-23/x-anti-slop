@@ -1,26 +1,19 @@
 import { storage } from '#imports';
 import {
-  activeCustomFilters,
   buildQuestions,
   buildState,
   callSystemOne,
   costOf,
-  customKey,
+  hidingMatch,
+  readScores,
   resolveModel,
-  type NoulAnswer,
-  type ScoreAnswer,
 } from './provider';
 import { questionSignature } from './signature';
 import { redactSecrets } from './redact';
 import { activeKey } from './defaults';
 import { EMPTY_STATS, statsStore } from './settings';
-import type { Settings, SignalId, Stats, TweetInput, Verdict } from './types';
+import type { Settings, Stats, TweetInput, Verdict } from './types';
 
-const SIGNAL_LABELS: Record<SignalId, string> = {
-  slop: 'AI slop',
-  ragebait: 'Rage bait',
-  ads: 'Promotional',
-};
 
 /** Jev allows 1200 req/min, so this is well inside the limit. */
 const MAX_CONCURRENCY = 6;
@@ -91,22 +84,8 @@ export async function clearCache() {
 function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
   const verdict: Verdict = { id, scores: entry.scores, quality: entry.quality, filtered: false };
 
-  // The strongest signal over its threshold becomes the reason shown.
-  let best: { label: string; score: number } | null = null;
-  for (const [signal, cfg] of Object.entries(settings.signals)) {
-    if (!cfg.enabled) continue;
-    const score = entry.scores[signal as SignalId];
-    if (score === undefined || score < cfg.threshold) continue;
-    if (!best || score > best.score) {
-      best = { label: SIGNAL_LABELS[signal as SignalId], score };
-    }
-  }
-
-  for (const filter of activeCustomFilters(settings)) {
-    const score = entry.scores[customKey(filter)];
-    if (score === undefined || score < filter.threshold) continue;
-    if (!best || score > best.score) best = { label: filter.label.trim(), score };
-  }
+  // Slop hides on ai_slop or ad. The strongest match becomes the reason.
+  const best = hidingMatch(entry.scores, settings);
 
   if (best) {
     verdict.filtered = true;
@@ -282,14 +261,8 @@ async function fetchEntry(
     }),
   );
 
-  const entry: CacheEntry = { scores: {}, sig, at: Date.now() };
-  for (const [key, answer] of Object.entries(res.answers)) {
-    if (key === 'quality' && answer.type === 'score') {
-      entry.quality = (answer as ScoreAnswer).score;
-    } else if (answer.type === 'noul') {
-      entry.scores[key] = (answer as NoulAnswer).noul;
-    }
-  }
+  const read = readScores(res.answers);
+  const entry: CacheEntry = { scores: read.scores, quality: read.quality, sig, at: Date.now() };
 
   // A clear, or a newer question set for this post, wins over a response that
   // was already in flight.
