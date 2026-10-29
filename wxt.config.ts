@@ -10,7 +10,7 @@ export default defineConfig({
   // A function, so Firefox-only keys stay out of the Chrome manifest — Chrome
   // logs "Unrecognized manifest key" for them and store review flags it.
   manifest: ({ browser }) => ({
-    name: 'x-anti-slop',
+    name: 'X-AntiSlop',
     description:
       'Hides AI-generated slop posts on X while you scroll, using TypeSafe Jev.',
     permissions: ['storage'],
