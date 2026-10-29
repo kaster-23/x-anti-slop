@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { DEFAULT_SETTINGS } from './defaults';
-import { simulateTimeline } from './pipeline-sim';
+import { mockModelLatency, simulateTimeline, typesafeKeyFromEnv } from './pipeline-sim';
 import { QUEUE_CONCURRENCY } from './request-queue';
 import { measureRecordedTimeline } from './timeline-fixture';
 import type { Settings } from './types';
@@ -8,6 +8,23 @@ import type { Settings } from './types';
 function settings(): Settings {
   return { ...DEFAULT_SETTINGS, allowlist: [], blocklist: [] };
 }
+
+describe('mock model latency', () => {
+  test('uses a cold first call and a warm band after that', () => {
+    expect(mockModelLatency(0)).toBe(700);
+    for (let call = 1; call < 20; call++) {
+      const warm = mockModelLatency(call);
+      expect(warm).toBeGreaterThanOrEqual(250);
+      expect(warm).toBeLessThanOrEqual(580);
+    }
+  });
+
+  test('reads a TypeSafe key from the environment and ignores blanks', () => {
+    expect(typesafeKeyFromEnv({})).toBe('');
+    expect(typesafeKeyFromEnv({ TYPESAFE_API_KEY: '   ' })).toBe('');
+    expect(typesafeKeyFromEnv({ TYPESAFE_API_KEY: ' apikey_test ' })).toBe('apikey_test');
+  });
+});
 
 describe('simulateTimeline', () => {
   test('starts the closer model post first when both are already inside the margin', () => {
@@ -75,14 +92,17 @@ describe('recorded fixture timeline', () => {
     expect(result.settledLocally).toBe(22);
     expect(result.modelPosts).toBe(14);
     expect(result.localShare).toBeCloseTo(22 / 36);
-    // Local posts are the majority and settle in the same turn they are
-    // prefetched, so the median across every post is 0. Model posts take the
-    // mock round trip and, at this scroll speed, finish before they are seen.
+    expect(result.mocked).toBe(true);
+    const firstModel = result.modelStartOrder[0];
+    expect(byId.get(firstModel ?? '')?.verdictMs).toBe(700);
     expect(result.medianVerdictMs).toBe(0);
-    expect(result.medianModelVerdictMs).toBe(280);
+    expect(result.medianModelVerdictMs).toBeCloseTo(430, 0);
     expect(result.medianUserDelayMs).toBe(0);
     expect(result.readyBeforeView).toBe(36);
-    expect(result.maxConcurrent).toBe(2);
+    expect(result.maxConcurrent).toBe(3);
+    for (const decision of result.decisions) {
+      if (!decision.local) expect(decision.verdictMs).toBeGreaterThanOrEqual(250);
+    }
   });
 
   test('local decisions are instant and the queue stays inside the cap', () => {

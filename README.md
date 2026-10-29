@@ -122,8 +122,15 @@ pnpm build:firefox
 a Chrome profile that is already signed in to X.
 
 `pnpm measure` replays a fixture timeline through the prefilter and the request
-queue. The model leg is a fixed latency (no API key, no network) and the script
-prints the share of posts settled locally and the median time-to-verdict.
+queue and prints the share of posts settled locally and the median
+time-to-verdict. With no key, Jev is mocked: the first model call is 700ms
+(cold) and later calls are 250–580ms (warm). Set a key to use real round trips
+instead:
+
+```bash
+pnpm measure
+TYPESAFE_API_KEY=… pnpm measure
+```
 
 `pnpm eval` scores a small labelled set of posts against the live API. It needs
 your own key and is not part of CI:

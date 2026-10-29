@@ -15,11 +15,31 @@ export interface SimScenario {
   /** Extra root margin above and below the screen. One viewport in the product. */
   prefetchMargin: number;
   scrollSpeedPxPerSec: number;
-  /** Fixed stand-in for a Jev round trip. No network. */
-  modelLatencyMs: number;
+  /**
+   * Service time for a model call. A number is the same for every call.
+   * A function receives the post and how many model calls have already started
+   * (0 is the cold call). Omitted uses {@link mockModelLatency}.
+   */
+  modelLatencyMs?: number | ((post: SimPost, callIndex: number) => number);
   concurrency?: number;
   settings: Settings;
   scorer?: HeuristicScorer;
+  /** False when `modelLatencyMs` came from timed Jev calls. */
+  mocked?: boolean;
+}
+
+/** First model call, before the connection is warm. */
+export const MOCK_COLD_MS = 700;
+/** Later calls. Deterministic samples inside the warm band. */
+export const MOCK_WARM_MS = [250, 330, 410, 490, 580, 290, 370, 450, 530, 310, 390, 470, 550] as const;
+
+export function mockModelLatency(callIndex: number): number {
+  if (callIndex <= 0) return MOCK_COLD_MS;
+  return MOCK_WARM_MS[(callIndex - 1) % MOCK_WARM_MS.length] ?? MOCK_WARM_MS[0];
+}
+
+export function typesafeKeyFromEnv(env: NodeJS.ProcessEnv = process.env): string {
+  return env.TYPESAFE_API_KEY?.trim() ?? '';
 }
 
 export interface PostMeasurement {
@@ -51,7 +71,7 @@ export interface PipelineMeasurement {
   modelStartOrder: string[];
   localReasons: Record<string, number>;
   decisions: PostMeasurement[];
-  mocked: true;
+  mocked: boolean;
 }
 
 interface Scheduled extends SimPost {
@@ -71,10 +91,12 @@ interface Running {
 /**
  * Scrolls a fixture timeline at a constant speed and runs the real prefilter.
  * Posts that need a model wait on a priority queue with the production
- * concurrency cap. Latency is a fixed mock: this does not call Jev.
+ * concurrency cap. Model service time comes from {@link mockModelLatency} unless
+ * the scenario supplies another.
  */
 export function simulateTimeline(posts: SimPost[], scenario: SimScenario): PipelineMeasurement {
   const concurrency = scenario.concurrency ?? QUEUE_CONCURRENCY;
+  let modelCalls = 0;
   const entries: Scheduled[] = posts
     .map((post) => ({
       ...post,
@@ -128,7 +150,9 @@ export function simulateTimeline(posts: SimPost[], scenario: SimScenario): Pipel
       const next = pending.shift();
       if (!next) break;
       modelStartOrder.push(next.id);
-      running.push({ post: next, doneAt: now + scenario.modelLatencyMs });
+      const latency = serviceMs(scenario, next, modelCalls);
+      modelCalls += 1;
+      running.push({ post: next, doneAt: now + latency });
       maxConcurrent = Math.max(maxConcurrent, running.length);
     }
   }
@@ -160,8 +184,15 @@ export function simulateTimeline(posts: SimPost[], scenario: SimScenario): Pipel
     modelStartOrder,
     localReasons,
     decisions,
-    mocked: true,
+    mocked: scenario.mocked !== false,
   };
+}
+
+function serviceMs(scenario: SimScenario, post: SimPost, callIndex: number): number {
+  const spec = scenario.modelLatencyMs;
+  if (typeof spec === 'function') return spec(post, callIndex);
+  if (typeof spec === 'number') return spec;
+  return mockModelLatency(callIndex);
 }
 
 export function median(values: number[]): number {

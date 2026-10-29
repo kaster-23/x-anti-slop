@@ -221,7 +221,6 @@ export const FIXTURE_SCENARIO = {
   viewportHeight: 900,
   prefetchMargin: 900,
   scrollSpeedPxPerSec: 1100,
-  modelLatencyMs: 280,
 };
 
 export function layoutTimeline<T extends { height: number }>(
