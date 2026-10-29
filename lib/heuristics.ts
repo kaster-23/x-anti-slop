@@ -14,7 +14,7 @@ export const MIN_WORDS_FOR_MODEL = 5;
 
 export const HASHTAG_HIDE_AT = 6;
 export const EMOJI_HIDE_AT = 10;
-export const URL_HIDE_AT = 4;
+export const URL_HIDE_AT = 5;
 export const SHOUT_MIN_LETTERS = 24;
 export const SHOUT_MIN_CAPS_RATIO = 0.7;
 export const SHOUT_MIN_BANGS = 3;

@@ -11,23 +11,18 @@ export const SIGNAL_HELP: Record<SignalId, HelpCopy> = {
   slop: {
     label: 'AI slop',
     explanation:
-      'Hides a post when the writing itself looks machine-made: tidy lists, announced insights, chatbot leftovers. Lower means more posts get caught.',
-    example:
-      'Example: “Let’s unpack this. The real lesson isn’t the tool — it’s the mindset.”',
+      'Hide machine-written filler. Keep a post with a name, a number, or a thing that happened.',
+    example: 'Hide: “Let’s unpack the mindset.” Keep: “p95 fell from 800ms to 220ms.”',
   },
   ragebait: {
     label: 'Rage bait',
-    explanation:
-      'Hides posts written to make you angry and reply. A stricter bar catches quieter dunks, and will sometimes catch a heated but real argument.',
-    example:
-      'Example: “If you still disagree you’re either lying or you can’t read, and I’m done being polite.”',
+    explanation: 'Hide posts written to farm angry replies. Keep a specific complaint that brings evidence.',
+    example: 'Hide: “if you disagree you cannot read.” Keep: “the fare would go from 64 to 81.”',
   },
   ads: {
     label: 'Ads and shilling',
-    explanation:
-      'Hides sales pitches, affiliate drops, and crypto shilling. Engagement bait that is really an ad is caught here too.',
-    example:
-      'Example: “Use code SLOP20 for 40% off the only productivity system you’ll ever need.”',
+    explanation: 'Hide pitches and shilling. Keep a launch that says what shipped and what it costs.',
+    example: 'Hide: “code SLOP20, link in bio.” Keep: “the case is 39 dollars, no subscription.”',
   },
 };
 
@@ -85,8 +80,9 @@ export const MEDIA_HELP: Record<MediaFilterId, HelpCopy> = {
 
 export const PROMOTED_HELP: HelpCopy = {
   label: 'Promoted posts',
-  explanation: 'Hides anything X has marked as promoted. It never asks the model.',
-  example: 'Example: a sponsored post from a brand you don’t follow, with a Promoted label.',
+  explanation:
+    'On hides every post marked Promoted, unread. Off judges the words. A real launch can stay. A get-rich pitch still goes.',
+  example: 'Hide: “comment MONEY for the signal.” Keep: “version 2.3 adds offline drafts.”',
 };
 
 export const REPEAT_HELP: HelpCopy = {

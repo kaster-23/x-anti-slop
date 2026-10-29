@@ -44,6 +44,10 @@ describe('preset definitions', () => {
       expect(preset.name.length).toBeGreaterThan(0);
       expect(preset.description.length).toBeGreaterThan(20);
       expect(preset.description).not.toMatch(/\n/);
+      expect(preset.willSee.length).toBeGreaterThanOrEqual(2);
+      expect(preset.willSee.length).toBeLessThanOrEqual(4);
+      expect(preset.wontSee.length).toBeGreaterThanOrEqual(2);
+      expect(preset.wontSee.length).toBeLessThanOrEqual(4);
       const key = JSON.stringify(preset.values);
       expect(seen.has(key)).toBe(false);
       seen.add(key);
@@ -122,7 +126,7 @@ describe('preset detection', () => {
   });
 
   test('returns null when any owned knob differs', () => {
-    expect(detectPreset(withPreset('balanced', { hidePromoted: false }))).toBeNull();
+    expect(detectPreset(withPreset('balanced', { hidePromoted: true }))).toBeNull();
     expect(detectPreset(withPreset('light', { repeatThreshold: 7 }))).toBeNull();
     const buckets = withPreset('strict');
     buckets.slopCategories = {
@@ -189,9 +193,9 @@ describe('custom switching', () => {
     const current = withPreset('balanced', {
       preset: 'custom',
       presetBase: 'light',
-      hidePromoted: false,
+      hidePromoted: true,
     });
-    const patch = presetChangePatch(current, { hidePromoted: true });
+    const patch = presetChangePatch(current, { hidePromoted: false });
     expect(patch.preset).toBe('balanced');
     expect(patch.presetBase).toBe('balanced');
     expect(samePresetValues(presetValuesOf({ ...current, ...patch }), getPreset('balanced').values)).toBe(
@@ -255,11 +259,11 @@ describe('migration', () => {
   });
 
   test('a customized save with no preset fields becomes Custom based on the closest preset', () => {
-    const settings = coerceSettings(withoutPreset(withPreset('balanced', { hidePromoted: false })));
+    const settings = coerceSettings(withoutPreset(withPreset('balanced', { hidePromoted: true })));
     expect(settings.preset).toBe('custom');
     expect(settings.presetBase).toBe('balanced');
     expect(closestPreset(settings)).toBe('balanced');
-    expect(settings.hidePromoted).toBe(false);
+    expect(settings.hidePromoted).toBe(true);
   });
 
   test('keeps a stored base when the knobs match no preset', () => {

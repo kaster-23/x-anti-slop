@@ -111,20 +111,21 @@ const SIGNAL_QUESTIONS: Record<Exclude<SignalId, 'slop'>, NoulQuestion> = {
     type: 'noul',
     instructions:
       'The post is rage bait: engineered to provoke outrage, tribal anger, or moral panic ' +
-      'rather than to inform.',
+      'rather than to inform. A factual report, or a specific criticism with evidence, is not rage bait.',
     criteria: {
       true: 'Inflammatory, dunk-y, or manufactured outrage designed to farm angry replies',
-      false: 'Calm or informative, even when it discusses a contentious topic',
+      false: 'Calm, specific, or informative, even when the topic is contentious',
     },
   },
   ads: {
     type: 'noul',
     instructions:
-      'The post is advertising or promotion: a paid ad, sponsored content, an affiliate or ' +
-      'dropshipping pitch, crypto or giveaway shilling, or a thinly veiled sales pitch.',
+      'The post is a sales pitch: affiliate, dropshipping, crypto or casino shilling, a vague ' +
+      'get-rich offer, or engagement bait whose only point is a click. A concrete product update ' +
+      'or launch with real details is not a pitch just because it names a product.',
     criteria: {
-      true: 'Primarily selling or promoting something',
-      false: 'Not promotional, even if it mentions a product the author likes',
+      true: 'The point of the post is to sell, shill, or farm a click',
+      false: 'Specific and useful, even if it mentions a product, a price, or a launch',
     },
   },
 };
@@ -138,7 +139,8 @@ export const QUALITY_LEVELS = [
 
 const QUALITY_QUESTION: ScoreQuestion = {
   type: 'score',
-  instructions: 'The overall informational value of this post to a thoughtful reader.',
+  instructions:
+    'How much a thoughtful reader learns. Specific names, numbers, and a usable point score higher. Vague hype and empty agreement score lower.',
   criteria: QUALITY_LEVELS,
 };
 

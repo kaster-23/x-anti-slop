@@ -38,6 +38,9 @@ jobs:
       - name: Eval against recorded Jev answers
         run: pnpm eval
 
+      - name: Preset rule eval
+        run: pnpm eval:rules
+
       - name: Build Chrome
         run: pnpm build
 

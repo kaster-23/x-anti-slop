@@ -103,7 +103,7 @@ export const FIXTURE_POSTS: FixturePost[] = [
   {
     id: 'links-1',
     author: '@dumps',
-    text: 'read https://a.example/1 https://b.example/2 https://c.example/3 https://d.example/4 before you reply',
+    text: 'read https://a.example/1 https://b.example/2 https://c.example/3 https://d.example/4 https://e.example/5 before you reply',
     height: NORMAL,
   },
 

@@ -70,6 +70,35 @@ export function PresetPicker({
           />
         ))}
       </div>
+      {variant === 'compact'
+        ? (() => {
+            const glance = PRESETS.find((item) => item.id === (preset === 'custom' ? presetBase : preset));
+            return glance ? <PresetGlance preset={glance} /> : null;
+          })()
+        : null}
+    </div>
+  );
+}
+
+function PresetGlance({ preset }: { preset: Preset }) {
+  return (
+    <div className="preset-glance">
+      <div>
+        <span className="preset-kicker">You will see</span>
+        <ul>
+          {preset.willSee.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <span className="preset-kicker">You won't see</span>
+        <ul>
+          {preset.wontSee.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -98,7 +127,27 @@ function PresetOption({
     >
       <span className="preset-name">{preset.name}</span>
       {variant === 'list' ? (
-        <span className="preset-desc">{preset.description}</span>
+        <span className="preset-copy">
+          <span className="preset-desc">{preset.description}</span>
+          <span className="preset-glance">
+            <span>
+              <span className="preset-kicker">You will see</span>
+              <ul>
+                {preset.willSee.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </span>
+            <span>
+              <span className="preset-kicker">You won't see</span>
+              <ul>
+                {preset.wontSee.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </span>
+          </span>
+        </span>
       ) : (
         <span className="sr-only">{preset.description}</span>
       )}

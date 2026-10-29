@@ -39,7 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
     gifs: false,
   },
 
-  hidePromoted: true,
+  hidePromoted: false,
   hideMode: 'collapse',
   cards: DEFAULT_CARD_APPEARANCE,
   hideUntilChecked: false,
