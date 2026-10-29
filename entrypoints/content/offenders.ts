@@ -16,6 +16,7 @@ import {
 import { reportContentFailure, runContentTask } from '@/lib/extension-context';
 import { loadRepeat, repeatStore, updateRepeat } from '@/lib/repeat-store';
 import { openXAccountFlow, type AccountAction, type FlowStatus } from '@/lib/x-account-flow';
+import { paintFeedCard } from './cards';
 
 /** Posts that crossed the threshold during this turn. Cleared once the flush finishes. */
 let crossedThisTurn = new Set<string>();
@@ -206,9 +207,14 @@ function renderSuggestion(account: FlaggedAccount, article: HTMLElement): HTMLEl
   const root = document.createElement('div');
   root.className = 'ct-suggest';
   root.dataset.handle = account.handle;
+  const chrome = paintFeedCard(root, `Auto-hidden · @${account.handle}`);
   root.addEventListener('click', (event) => {
     event.stopPropagation();
   });
+
+  const chip = document.createElement('span');
+  chip.className = 'ct-tag';
+  chip.textContent = chrome.chip;
 
   const copy = document.createElement('p');
   copy.className = 'ct-suggest-copy';
@@ -246,7 +252,7 @@ function renderSuggestion(account: FlaggedAccount, article: HTMLElement): HTMLEl
   status.className = 'ct-suggest-status';
   status.hidden = true;
 
-  root.append(copy, actions, status);
+  root.append(chip, copy, actions, status);
   return root;
 }
 

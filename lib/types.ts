@@ -1,3 +1,4 @@
+import type { CardAppearance } from './card-style';
 import type { CategorySetting, SlopCategory, SlopWeights } from './detect/score';
 
 export type ProviderId = 'typesafe' | 'openrouter';
@@ -69,6 +70,12 @@ export interface Settings {
   mediaFilters: Record<MediaFilterId, boolean>;
   hidePromoted: boolean;
   hideMode: HideMode;
+
+  /**
+   * How hidden posts are drawn. Not a preset knob: changing a color does not
+   * leave Balanced. Older saves omit it and receive the defaults on load.
+   */
+  cards: CardAppearance;
 
   /** Mask posts until a verdict arrives, so filtered posts never flash into view. */
   hideUntilChecked: boolean;
