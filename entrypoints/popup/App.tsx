@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { browser } from '#imports';
-import { loadSettings, saveSettings } from '@/lib/settings';
-import { activeKey, isUsable, THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
+import { saveSettings } from '@/lib/settings';
+import { blankKeys, isUsable, THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
 import { PROVIDERS, QUALITY_LEVELS } from '@/lib/provider';
 import type { MediaFilterId, Settings, SignalId, Stats } from '@/lib/types';
 
@@ -22,11 +22,19 @@ const QUALITY_STEP = 0.5;
 
 export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [hasKey, setHasKey] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [apiError, setApiError] = useState<{ message: string } | null>(null);
 
   useEffect(() => {
-    loadSettings().then(setSettings);
+    browser.runtime
+      .sendMessage({ type: 'getPublicSettings' })
+      .then((r: { settings?: Settings; hasKey?: boolean }) => {
+        if (!r?.settings) return;
+        setSettings(blankKeys(r.settings));
+        setHasKey(r.hasKey === true);
+      })
+      .catch(() => {});
     browser.runtime
       .sendMessage({ type: 'getStats' })
       .then((r: { stats?: Stats }) => setStats(r?.stats ?? null))
@@ -39,12 +47,11 @@ export default function App() {
 
   async function update(patch: Partial<Settings>) {
     setSettings((prev) => (prev ? { ...prev, ...patch } : prev));
-    setSettings(await saveSettings(patch));
+    setSettings(blankKeys(await saveSettings(patch)));
   }
 
   if (!settings) return <div className="card">Loading…</div>;
 
-  const hasKey = !!activeKey(settings);
   const customFilters = (settings.customFilters ?? []).filter(isUsable);
 
   function patchFilter(id: string, fields: Partial<(typeof customFilters)[number]>) {
@@ -73,7 +80,14 @@ export default function App() {
         {apiError && (
           <div className="card notice error">
             <div className="row">
-              <span className="grow">{apiError.message}</span>
+              <span className="grow">
+                {apiError.message}{' '}
+                {apiError.message.startsWith('Check your key') && (
+                  <a href="#" onClick={openOptions}>
+                    Open settings
+                  </a>
+                )}
+              </span>
               <button
                 type="button"
                 className="dismiss"

@@ -2,12 +2,15 @@ import { defineBackground, browser } from '#imports';
 import { classify, clearCache, errorStore, readError, resetStats } from '@/lib/classifier';
 import { loadSettings, settingsStore, statsStore, EMPTY_STATS } from '@/lib/settings';
 import { testCredentials, testFilter } from '@/lib/provider';
-import { activeKey } from '@/lib/defaults';
+import { activeKey, blankKeys } from '@/lib/defaults';
+import { redactSecrets } from '@/lib/redact';
 import type { Message } from '@/lib/types';
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
-    handle(message).then(sendResponse, (err: Error) => sendResponse({ error: err.message }));
+    handle(message).then(sendResponse, (err: Error) =>
+      sendResponse({ error: redactSecrets(err.message) }),
+    );
     return true; // keeps the message channel open for the async response
   });
 
@@ -44,7 +47,11 @@ async function handle(message: Message) {
       return { verdicts: await classify(message.tweets, settings) };
     }
     case 'getSettings':
-      return { settings: await loadSettings() };
+      return { settings: blankKeys(await loadSettings()) };
+    case 'getPublicSettings': {
+      const settings = await loadSettings();
+      return { settings: blankKeys(settings), hasKey: activeKey(settings).length > 0 };
+    }
     case 'getStats':
       return { stats: (await statsStore.getValue()) ?? EMPTY_STATS };
     // Distinct key: `error` is also how a rejected handler reports itself, and
@@ -56,6 +63,13 @@ async function handle(message: Message) {
       return { ok: true };
     case 'clearCache':
       await clearCache();
+      // The content script keeps its own verdict map. Tell open timelines to
+      // drop it and ask again, now that the persisted cache is empty.
+      try {
+        await broadcastSettingsChanged();
+      } catch {
+        /* a timeline picks the empty cache up on its next settings change */
+      }
       return { ok: true };
     case 'resetStats':
       await resetStats();

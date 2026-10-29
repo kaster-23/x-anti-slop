@@ -1,8 +1,8 @@
 import { defineContentScript, browser } from '#imports';
 import { TWEET_SELECTOR, extractTweet, readTweetId, type Extracted } from '@/lib/extract';
-import { loadSettings } from '@/lib/settings';
 import { activeCustomFilters } from '@/lib/provider';
-import { activeKey } from '@/lib/defaults';
+import { DEFAULT_SETTINGS, blankKeys } from '@/lib/defaults';
+import { redactSecrets } from '@/lib/redact';
 import type { Settings, TweetInput, Verdict } from '@/lib/types';
 import {
   autoHiddenReason,
@@ -35,7 +35,8 @@ export default defineContentScript({
   cssInjectionMode: 'manifest',
 
   async main(ctx) {
-    let settings = await loadSettings();
+    let settings = DEFAULT_SETTINGS;
+    let hasKey = false;
 
     /** X recycles DOM nodes, so decisions are remembered per status id rather
      *  than per element. */
@@ -43,8 +44,49 @@ export default defineContentScript({
     const revealed = new Set<string>();
     const queue = new Map<string, TweetInput>();
     let flushTimer: number | undefined;
-
+    let scanTimer: number | undefined;
+    /** Bumped on every settings push. In-flight scans and failsafe timers
+     *  captured the previous value and must not apply it afterwards. */
+    let epoch = 0;
+    let ready = false;
     let stopOffenders = () => {};
+
+    async function applySettings(generation: number) {
+      try {
+        const next = await loadTimeline();
+        if (generation !== epoch || ctx.isInvalid) return;
+        settings = next.settings;
+        hasKey = next.hasKey;
+      } catch (err) {
+        // Fail open: a settings read that throws should not leave posts hidden.
+        console.warn('[x-anti-slop] settings load failed', errorText(err));
+        if (generation !== epoch || ctx.isInvalid) return;
+        settings = { ...settings, enabled: false };
+        hasKey = false;
+      }
+      if (generation !== epoch || ctx.isInvalid) return;
+      ready = true;
+      decided.clear();
+      queue.clear();
+      if (flushTimer !== undefined) {
+        clearTimeout(flushTimer);
+        flushTimer = undefined;
+      }
+      resetAll();
+      scan();
+    }
+
+    const onMessage = (message: { type?: string }) => {
+      if (message?.type !== 'settingsChanged') return;
+      void applySettings(++epoch);
+    };
+
+    browser.runtime.onMessage.addListener(onMessage);
+
+    const observer = new MutationObserver(() => scheduleScan());
+    const root = document.body ?? document.documentElement;
+    observer.observe(root, { childList: true, subtree: true });
+
     try {
       stopOffenders = await startOffenders({
         rescan: () => {
@@ -60,37 +102,28 @@ export default defineContentScript({
       console.warn('[x-anti-slop] repeat-offender memory unavailable', err);
     }
 
-    const onMessage = (message: { type?: string }) => {
-      if (message?.type !== 'settingsChanged') return;
-      void (async () => {
-        settings = await loadSettings();
-        decided.clear();
-        queue.clear();
-        resetAll();
-        scan();
-      })();
-    };
-    browser.runtime.onMessage.addListener(onMessage);
-
-    const observer = new MutationObserver(() => scheduleScan());
-    observer.observe(document.body, { childList: true, subtree: true });
+    // A re-injected script (extension reload or update) invalidates this
+    // context. Without the disconnect, the old observer and listener keep
+    // running beside the new ones for the rest of the tab.
     ctx.onInvalidated(() => {
       observer.disconnect();
       browser.runtime.onMessage.removeListener(onMessage);
       stopOffenders();
     });
-    scan();
 
-    let scanTimer: number | undefined;
+    await applySettings(++epoch);
+
     function scheduleScan() {
+      if (!ready || ctx.isInvalid) return;
       if (scanTimer !== undefined) return;
-      scanTimer = window.setTimeout(() => {
+      scanTimer = ctx.setTimeout(() => {
         scanTimer = undefined;
         scan();
       }, 60);
     }
 
     function scan() {
+      if (!ready || ctx.isInvalid) return;
       if (!settings.enabled || onExcludedRoute()) return;
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
         process(article);
@@ -156,7 +189,7 @@ export default defineContentScript({
       if (prior === 'local') return;
 
       if (!needsModel(settings)) return;
-      if (!activeKey(settings)) return;
+      if (!hasKey) return;
       // A post with no text gives the model nothing to judge.
       if (!tweet.text && !tweet.quotedText) return;
 
@@ -169,11 +202,14 @@ export default defineContentScript({
 
     function scheduleFlush() {
       if (flushTimer !== undefined) return;
-      flushTimer = window.setTimeout(flush, BATCH_DEBOUNCE_MS);
+      flushTimer = ctx.setTimeout(() => {
+        flushTimer = undefined;
+        void flush();
+      }, BATCH_DEBOUNCE_MS);
     }
 
     async function flush() {
-      flushTimer = undefined;
+      const generation = epoch;
       if (queue.size === 0) return;
       const tweets = [...queue.values()];
       queue.clear();
@@ -184,18 +220,22 @@ export default defineContentScript({
           verdicts?: Verdict[];
           error?: string;
         };
+        if (generation !== epoch || ctx.isInvalid) return;
         verdicts = res?.verdicts ?? [];
-        if (res?.error) console.warn('[x-anti-slop]', res.error);
+        if (res?.error) console.warn('[x-anti-slop]', redactSecrets(res.error));
       } catch (err) {
-        console.warn('[x-anti-slop] classify failed', err);
+        console.warn('[x-anti-slop] classify failed', errorText(err));
+        if (generation !== epoch || ctx.isInvalid) return;
       }
+
+      if (generation !== epoch || ctx.isInvalid) return;
 
       const byId = new Map(verdicts.map((v) => [v.id, v]));
       for (const tweet of tweets) {
         const verdict = byId.get(tweet.id);
         if (!verdict || verdict.error) {
           // Failing open: a post is never hidden because the API broke.
-          if (verdict?.error) console.warn('[x-anti-slop]', verdict.error);
+          if (verdict?.error) console.warn('[x-anti-slop]', redactSecrets(verdict.error));
           unmaskById(tweet.id);
           continue;
         }
@@ -225,11 +265,14 @@ export default defineContentScript({
     }
 
     function mask(article: HTMLElement, id: string) {
+      const generation = epoch;
       article.dataset.ctState = 'pending';
       cellOf(article).classList.add('ct-pending');
-      window.setTimeout(() => {
+      ctx.setTimeout(() => {
         // The node may have been recycled for a different post by now; unmasking
-        // then would flash the new post into view mid-check.
+        // then would flash the new post into view mid-check. A settings change
+        // starts a new check on the same id, and this timer must not end it.
+        if (generation !== epoch) return;
         if (article.dataset.ctId !== id) return;
         if (article.dataset.ctState === 'pending') unmask(article);
       }, FAILSAFE_MS);
@@ -266,11 +309,19 @@ export default defineContentScript({
 
       const placeholder = document.createElement('div');
       placeholder.className = 'ct-placeholder';
-      placeholder.innerHTML =
-        '<span class="ct-dot"></span><span class="ct-reason"></span>' +
-        '<button type="button" class="ct-show">Show</button>';
-      placeholder.querySelector('.ct-reason')!.textContent = reason;
-      placeholder.querySelector('.ct-show')!.addEventListener('click', (event) => {
+
+      const dot = document.createElement('span');
+      dot.className = 'ct-dot';
+
+      const reasonEl = document.createElement('span');
+      reasonEl.className = 'ct-reason';
+      reasonEl.textContent = reason;
+
+      const show = document.createElement('button');
+      show.type = 'button';
+      show.className = 'ct-show';
+      show.textContent = 'Show';
+      show.addEventListener('click', (event) => {
         event.stopPropagation();
         event.preventDefault();
         revealed.add(id);
@@ -278,6 +329,8 @@ export default defineContentScript({
         article.dataset.ctState = 'revealed';
         placeholder.remove();
       });
+
+      placeholder.append(dot, reasonEl, show);
       cell.prepend(placeholder);
     }
 
@@ -295,6 +348,21 @@ export default defineContentScript({
     }
   },
 });
+
+/** Settings and key presence from the background worker. The key itself is never included. */
+async function loadTimeline(): Promise<{ settings: Settings; hasKey: boolean }> {
+  const res = (await browser.runtime.sendMessage({ type: 'getPublicSettings' })) as {
+    settings?: Settings;
+    hasKey?: boolean;
+  };
+  if (!res?.settings) throw new Error('Settings unavailable');
+  return { settings: blankKeys(res.settings), hasKey: res.hasKey === true };
+}
+
+function errorText(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return redactSecrets(message);
+}
 
 function toInput(t: Extracted): TweetInput {
   return {

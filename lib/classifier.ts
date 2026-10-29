@@ -1,25 +1,19 @@
 import { storage } from '#imports';
 import {
-  activeCustomFilters,
   buildQuestions,
   buildState,
   callSystemOne,
   costOf,
-  customKey,
+  hidingMatch,
+  readScores,
   resolveModel,
-  type NoulAnswer,
-  type ScoreAnswer,
 } from './provider';
-import { djb2 } from './hash';
+import { questionSignature } from './signature';
+import { redactSecrets } from './redact';
 import { activeKey } from './defaults';
 import { EMPTY_STATS, statsStore } from './settings';
-import type { Settings, SignalId, Stats, TweetInput, Verdict } from './types';
+import type { Settings, Stats, TweetInput, Verdict } from './types';
 
-const SIGNAL_LABELS: Record<SignalId, string> = {
-  slop: 'AI slop',
-  ragebait: 'Rage bait',
-  ads: 'Promotional',
-};
 
 /** Jev allows 1200 req/min, so this is well inside the limit. */
 const MAX_CONCURRENCY = 6;
@@ -34,7 +28,12 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const inFlight = new Map<string, Promise<Verdict>>();
+const inFlight = new Map<string, Promise<CacheEntry>>();
+/** Bumped by clearCache so a request already on the wire cannot refill the cache. */
+let cacheEpoch = 0;
+/** Orders cache writes so an older in-flight request cannot replace a newer one. */
+let nextSeq = 0;
+const committedSeq = new Map<string, number>();
 let cacheLoading: Promise<void> | undefined;
 let flushTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -71,51 +70,22 @@ async function flushCache() {
 }
 
 export async function clearCache() {
+  cacheEpoch += 1;
   cache.clear();
+  committedSeq.clear();
+  // Drop the map so a caller that starts after the clear does not join a
+  // request that was already in flight and then skip the network.
+  inFlight.clear();
   clearTimeout(flushTimer);
   flushTimer = undefined;
   await cacheStore.setValue({});
 }
 
-/** Fingerprints everything that changes a verdict, so stale cache entries
- *  stop matching and get re-checked. */
-function questionSignature(settings: Settings): string {
-  const on = Object.entries(settings.signals)
-    .filter(([, c]) => c.enabled)
-    .map(([id]) => id)
-    .sort();
-  // Hashes the wording too, so editing a filter's text re-checks affected posts.
-  const custom = activeCustomFilters(settings)
-    .map((f) => `${f.id}:${f.instructions}:${f.whenTrue}:${f.whenFalse}`)
-    .sort()
-    .join('|');
-  return [
-    on.join(','),
-    `q${settings.minQuality > 0 ? 1 : 0}`,
-    resolveModel(settings),
-    djb2(custom),
-  ].join('|');
-}
-
 function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
   const verdict: Verdict = { id, scores: entry.scores, quality: entry.quality, filtered: false };
 
-  // The strongest signal over its threshold becomes the reason shown.
-  let best: { label: string; score: number } | null = null;
-  for (const [signal, cfg] of Object.entries(settings.signals)) {
-    if (!cfg.enabled) continue;
-    const score = entry.scores[signal as SignalId];
-    if (score === undefined || score < cfg.threshold) continue;
-    if (!best || score > best.score) {
-      best = { label: SIGNAL_LABELS[signal as SignalId], score };
-    }
-  }
-
-  for (const filter of activeCustomFilters(settings)) {
-    const score = entry.scores[customKey(filter)];
-    if (score === undefined || score < filter.threshold) continue;
-    if (!best || score > best.score) best = { label: filter.label.trim(), score };
-  }
+  // Slop hides on ai_slop or ad. The strongest match becomes the reason.
+  const best = hidingMatch(entry.scores, settings);
 
   if (best) {
     verdict.filtered = true;
@@ -169,7 +139,10 @@ async function flushStats() {
   } catch (err) {
     // Put the counts back so the next flush retries them rather than losing them.
     mergeInto((pending ??= emptyDelta()), delta);
-    console.warn('[x-anti-slop] stats write failed', err);
+    console.warn(
+      '[x-anti-slop] stats write failed',
+      redactSecrets(err instanceof Error ? err.message : String(err)),
+    );
   }
 }
 
@@ -265,13 +238,19 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
  * Jev evaluates every question against a single `state`, so posts are classified
  * one request at a time rather than batched — batching several posts into one
  * state makes the questions ambiguous about which post they refer to.
+ *
+ * Returns the score entry, not a verdict. Callers apply `decide` with the
+ * settings they were asked to use, so a threshold change that shares this
+ * request does not keep the thresholds from when the request started.
  */
-async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdict> {
+async function fetchEntry(
+  tweet: TweetInput,
+  settings: Settings,
+  sig: string,
+  seq: number,
+  epoch: number,
+): Promise<CacheEntry> {
   const questions = buildQuestions(settings);
-  if (Object.keys(questions).length === 0) {
-    return { id: tweet.id, scores: {}, filtered: false };
-  }
-
   const res = await withSlot(() =>
     callSystemOne({
       provider: settings.provider,
@@ -282,21 +261,53 @@ async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdi
     }),
   );
 
-  const entry: CacheEntry = { scores: {}, sig: questionSignature(settings), at: Date.now() };
-  for (const [key, answer] of Object.entries(res.answers)) {
-    if (key === 'quality' && answer.type === 'score') {
-      entry.quality = (answer as ScoreAnswer).score;
-    } else if (answer.type === 'noul') {
-      entry.scores[key] = (answer as NoulAnswer).noul;
-    }
-  }
+  const read = readScores(res.answers);
+  const entry: CacheEntry = { scores: read.scores, quality: read.quality, sig, at: Date.now() };
 
-  cache.set(tweet.id, entry);
-  scheduleFlush();
+  // A clear, or a newer question set for this post, wins over a response that
+  // was already in flight.
+  if (epoch === cacheEpoch && seq >= (committedSeq.get(tweet.id) ?? 0)) {
+    committedSeq.set(tweet.id, seq);
+    cache.set(tweet.id, entry);
+    scheduleFlush();
+  }
 
   const verdict = decide(tweet.id, entry, settings);
   recordUsage(res.usage?.input_tokens ?? 0, verdict.filtered, verdict.reason);
-  return verdict;
+  return entry;
+}
+
+async function classifyTweet(tweet: TweetInput, settings: Settings, sig: string): Promise<Verdict> {
+  const hit = cache.get(tweet.id);
+  if (hit?.sig === sig) return { ...decide(tweet.id, hit, settings), cached: true };
+
+  if (Object.keys(buildQuestions(settings)).length === 0) {
+    return { id: tweet.id, scores: {}, filtered: false };
+  }
+
+  const flightKey = `${tweet.id}\0${sig}`;
+  let pending = inFlight.get(flightKey);
+  if (!pending) {
+    const seq = ++nextSeq;
+    const epoch = cacheEpoch;
+    const promise = fetchEntry(tweet, settings, sig, seq, epoch).finally(() => {
+      if (inFlight.get(flightKey) === promise) inFlight.delete(flightKey);
+    });
+    inFlight.set(flightKey, promise);
+    pending = promise;
+  }
+
+  try {
+    const entry = await pending;
+    return { ...decide(tweet.id, entry, settings) };
+  } catch (err) {
+    return {
+      id: tweet.id,
+      scores: {},
+      filtered: false,
+      error: redactSecrets((err as Error).message || 'Classification failed'),
+    };
+  }
 }
 
 export async function classify(
@@ -305,28 +316,7 @@ export async function classify(
 ): Promise<Verdict[]> {
   await ensureCache();
   const sig = questionSignature(settings);
-
-  const verdicts = await Promise.all(
-    tweets.map(async (tweet) => {
-      const hit = cache.get(tweet.id);
-      if (hit && hit.sig === sig) return { ...decide(tweet.id, hit, settings), cached: true };
-
-      const pending = inFlight.get(tweet.id);
-      if (pending) return pending;
-
-      const promise = classifyOne(tweet, settings)
-        .catch((err): Verdict => ({
-          id: tweet.id,
-          scores: {},
-          filtered: false,
-          error: (err as Error).message,
-        }))
-        .finally(() => inFlight.delete(tweet.id));
-
-      inFlight.set(tweet.id, promise);
-      return promise;
-    }),
-  );
+  const verdicts = await Promise.all(tweets.map((tweet) => classifyTweet(tweet, settings, sig)));
 
   // Settled once per batch: a batch that reached the API at all clears the
   // banner, one that could not raises it.

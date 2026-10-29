@@ -1,5 +1,5 @@
 import { storage } from '#imports';
-import { DEFAULT_SETTINGS, EMPTY_STATS, clampThreshold } from './defaults';
+import { DEFAULT_SETTINGS, EMPTY_STATS, blankKeys, clampThreshold } from './defaults';
 import { clampRepeatThreshold } from './repeat';
 import type { Settings, Stats } from './types';
 
@@ -46,7 +46,8 @@ export function saveSettings(patch: Partial<Settings>): Promise<Settings> {
     const merged = { ...(await loadSettings()), ...patch };
     merged.repeatThreshold = clampRepeatThreshold(merged.repeatThreshold);
     await settingsStore.setValue(merged);
-    return merged;
+    // Callers other than the options page must not observe the key.
+    return blankKeys(merged);
   });
   writeQueue = next.catch(() => undefined);
   return next;
