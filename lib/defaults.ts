@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideMode: 'collapse',
   hideUntilChecked: false,
   allowlist: [],
+  blocklist: [],
 };
 
 /**
@@ -69,6 +70,7 @@ export function clampThreshold(value: number): number {
 export const EMPTY_STATS: Stats = {
   checked: 0,
   filtered: 0,
+  settledLocally: 0,
   bySignal: {},
   inputTokens: 0,
   cost: 0,

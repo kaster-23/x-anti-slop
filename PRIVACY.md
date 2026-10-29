@@ -24,7 +24,9 @@ worker sends one text string for that post to your selected provider. The
 string is the post text. When the post quotes another post, the quoted text is
 appended and the whole string is trimmed if the thread or quote chain is very
 long. The request does not include the author's handle, display name, or a
-description of attached media.
+description of attached media. Posts settled on the device — an account you
+allow or block, a post under five words, a promoted or media rule, or an
+obvious on-device count — are not sent.
 
 Alongside that text it sends the filter questions and your API key, used as a
 bearer token so the provider can authenticate and bill you. Only the background
@@ -64,8 +66,9 @@ accessible to the developer.
 - **Your settings**, including your API key and any filters you have written
 - **A cache of past results** — post identifiers and the resulting scores,
   capped at 5,000 entries, so the same post is never sent twice
-- **Counters** — how many posts have been checked and filtered, and the
-  resulting token spend
+- **Counters** — how many posts have been checked, how many were settled without
+  a model call, how many were hidden, and the resulting token spend
+- **The handles you choose to always show or always hide**
 - **The most recent API error**, so a failure can be shown in the popup
 
 Your API key is stored locally, is never logged, and is sent only to the

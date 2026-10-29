@@ -38,8 +38,10 @@ export const PROVIDERS: Record<
   },
 };
 
-const MAX_RETRY_DELAY_MS = 30_000;
-const REQUEST_TIMEOUT_MS = 30_000;
+/** A longer Retry-After fail-opens. Waiting it out would hold one of four slots. */
+const MAX_RETRY_DELAY_MS = 2_000;
+/** Per attempt. A hung call must not stall the timeline. */
+export const REQUEST_TIMEOUT_MS = 2_000;
 
 /**
  * Every request gets a timeout: the wait holds a concurrency slot, so a hung
@@ -284,6 +286,13 @@ export function costOf(inputTokens: number): number {
   return inputTokens * USD_PER_INPUT_TOKEN;
 }
 
+/** Small session totals need more digits than a lifetime total does. */
+export function formatCost(usd: number): string {
+  if (!Number.isFinite(usd) || usd <= 0) return '$0.0000';
+  if (usd < 0.001) return `$${usd.toFixed(6)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
 /** Floating names. Sending one would let a later release move the thresholds. */
 const FLOATING_MODELS = new Set([
   'jev-latest',
@@ -369,7 +378,8 @@ export async function callSystemOne(
   } catch (err) {
     if (opts.signal?.aborted) throw err;
     if ((err as Error).name === 'TimeoutError') {
-      throw new ProviderError(`No response after ${REQUEST_TIMEOUT_MS / 1000}s`, 0, true);
+      // Not retried: another two seconds would miss the scroll that asked.
+      throw new ProviderError(`No response after ${REQUEST_TIMEOUT_MS / 1000}s`, 0, false);
     }
     throw new ProviderError(redactSecrets(`Network error: ${(err as Error).message}`), 0, true);
   }

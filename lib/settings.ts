@@ -23,6 +23,8 @@ export async function loadSettings(): Promise<Settings> {
     ...stored,
     signals: { ...DEFAULT_SETTINGS.signals, ...stored?.signals },
     mediaFilters: { ...DEFAULT_SETTINGS.mediaFilters, ...stored?.mediaFilters },
+    allowlist: Array.isArray(stored?.allowlist) ? stored.allowlist : DEFAULT_SETTINGS.allowlist,
+    blocklist: Array.isArray(stored?.blocklist) ? stored.blocklist : DEFAULT_SETTINGS.blocklist,
   };
   // Thresholds saved before the floor was raised would otherwise sit below the
   // slider's own minimum, out of reach of the UI that set them.

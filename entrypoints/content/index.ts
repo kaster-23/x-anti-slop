@@ -2,8 +2,15 @@ import { defineContentScript, browser } from '#imports';
 import { TWEET_SELECTOR, extractTweet, readTweetId, type Extracted } from '@/lib/extract';
 import { activeCustomFilters } from '@/lib/provider';
 import { DEFAULT_SETTINGS, blankKeys } from '@/lib/defaults';
+import { prefilter, type PrefilterPost } from '@/lib/prefilter';
 import { redactSecrets } from '@/lib/redact';
 import type { Settings, TweetInput, Verdict } from '@/lib/types';
+import {
+  HIDE_UNTIL_CHECKED_FAILSAFE_MS,
+  distanceToViewport,
+  prefetchRootMargin,
+} from '@/lib/viewport';
+import { mountMeter } from './meter';
 import './style.css';
 
 /**
@@ -17,9 +24,7 @@ function onExcludedRoute(): boolean {
   return EXCLUDED_PATHS.some((re) => re.test(location.pathname));
 }
 
-/** Posts masked while awaiting a verdict are revealed anyway after this long. */
-const FAILSAFE_MS = 6000;
-/** Collects posts scrolled into view before sending, to batch the round trip. */
+/** Collects posts that entered the prefetch margin before sending one batch. */
 const BATCH_DEBOUNCE_MS = 120;
 
 export default defineContentScript({
@@ -30,18 +35,28 @@ export default defineContentScript({
   async main(ctx) {
     let settings = DEFAULT_SETTINGS;
     let hasKey = false;
+    const meter = mountMeter(document);
+    const session = { checked: 0, hidden: 0, settledLocally: 0, cost: 0 };
+    const metered = new Set<string>();
 
     /** X recycles DOM nodes, so decisions are remembered per status id rather
      *  than per element. */
     const decided = new Map<string, Verdict | 'local'>();
     const revealed = new Set<string>();
-    const queue = new Map<string, TweetInput>();
+    const outbound = new Map<string, { tweet: TweetInput; article: HTMLElement }>();
+    const inflightIds = new Set<string>();
+    const reported = new Set<string>();
+    const localBatch: Array<{ id: string; filtered: boolean; reason: string }> = [];
+    const inZone = new Set<HTMLElement>();
     let flushTimer: number | undefined;
+    let localTimer: number | undefined;
     let scanTimer: number | undefined;
     /** Bumped on every settings push. In-flight scans and failsafe timers
      *  captured the previous value and must not apply it afterwards. */
     let epoch = 0;
     let ready = false;
+
+    const meterVisible = () => ready && settings.enabled && !onExcludedRoute();
 
     async function applySettings(generation: number) {
       try {
@@ -59,12 +74,16 @@ export default defineContentScript({
       if (generation !== epoch || ctx.isInvalid) return;
       ready = true;
       decided.clear();
-      queue.clear();
+      outbound.clear();
+      inflightIds.clear();
+      reported.clear();
+      dropLocalBatch();
       if (flushTimer !== undefined) {
         clearTimeout(flushTimer);
         flushTimer = undefined;
       }
       resetAll();
+      meter.setVisible(meterVisible());
       scan();
     }
 
@@ -75,19 +94,64 @@ export default defineContentScript({
 
     browser.runtime.onMessage.addListener(onMessage);
 
-    const observer = new MutationObserver(() => scheduleScan());
+    const observer = new MutationObserver((mutations) => {
+      if (!mutationMatters(mutations)) return;
+      scheduleScan();
+    });
     const root = document.body ?? document.documentElement;
     observer.observe(root, { childList: true, subtree: true });
+
+    let io = makeObserver();
+
+    const onResize = () => {
+      if (resizeTimer !== undefined) clearTimeout(resizeTimer);
+      resizeTimer = ctx.setTimeout(() => {
+        resizeTimer = undefined;
+        io.disconnect();
+        io = makeObserver();
+        inZone.clear();
+        for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
+          delete article.dataset.ctWatch;
+        }
+        scan();
+      }, 150);
+    };
+    let resizeTimer: number | undefined;
+    window.addEventListener('resize', onResize);
 
     // A re-injected script (extension reload or update) invalidates this
     // context. Without the disconnect, the old observer and listener keep
     // running beside the new ones for the rest of the tab.
     ctx.onInvalidated(() => {
       observer.disconnect();
+      io.disconnect();
+      window.removeEventListener('resize', onResize);
       browser.runtime.onMessage.removeListener(onMessage);
+      meter.remove();
     });
 
     await applySettings(++epoch);
+
+    function makeObserver() {
+      return new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            const article = entry.target as HTMLElement;
+            if (entry.isIntersecting) {
+              inZone.add(article);
+              process(article);
+            } else {
+              inZone.delete(article);
+            }
+          }
+        },
+        {
+          root: null,
+          rootMargin: prefetchRootMargin(window.innerHeight),
+          threshold: 0,
+        },
+      );
+    }
 
     function scheduleScan() {
       if (!ready || ctx.isInvalid) return;
@@ -100,18 +164,29 @@ export default defineContentScript({
 
     function scan() {
       if (ctx.isInvalid) return;
+      meter.setVisible(meterVisible());
       if (!settings.enabled || onExcludedRoute()) return;
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
-        process(article);
+        if (article.dataset.ctWatch !== '1') {
+          article.dataset.ctWatch = '1';
+          io.observe(article);
+        } else if (inZone.has(article)) {
+          process(article);
+        }
       }
     }
 
     function process(article: HTMLElement) {
+      if (!article.isConnected) {
+        inZone.delete(article);
+        return;
+      }
+
       // Our own placeholders re-trigger the observer, so most articles seen
       // here are already settled. But X recycles article nodes for new posts,
       // keeping our attributes, so a settled state counts only if the id matches.
-      const settled = article.dataset.ctState !== undefined
-        && article.dataset.ctState !== 'pending';
+      const settled =
+        article.dataset.ctState !== undefined && article.dataset.ctState !== 'pending';
       if (settled && article.dataset.ctId === readTweetId(article)) return;
 
       const tweet = extractTweet(article);
@@ -129,32 +204,36 @@ export default defineContentScript({
       }
 
       article.dataset.ctId = tweet.id;
-      if (revealed.has(tweet.id)) return;
-      if (isAllowlisted(tweet.author, settings)) return;
+      if (revealed.has(tweet.id)) {
+        article.dataset.ctState = 'revealed';
+        return;
+      }
 
       const prior = decided.get(tweet.id);
       if (prior && prior !== 'local') {
-        if (article.dataset.ctState === undefined) applyVerdict(article, tweet, prior);
+        if (article.dataset.ctState !== 'shown' && article.dataset.ctState !== 'revealed') {
+          applyVerdict(article, tweet, prior);
+        }
+        if (!prior.error) noteModel(prior);
         return;
       }
 
-      const local = localVerdict(tweet, settings);
-      if (local) {
+      const decision = prefilter(toPrefilter(tweet), settings);
+      if (decision.action !== 'model') {
         decided.set(tweet.id, 'local');
-        hide(article, tweet.id, local);
+        if (decision.action === 'hide') hide(article, tweet.id, decision.reason);
+        else unmask(article);
+        noteLocal(tweet.id, decision.action === 'hide', decision.reason);
         return;
       }
-      if (prior === 'local') return;
 
-      if (!needsModel(settings)) return;
-      if (!hasKey) return;
-      // A post with no text gives the model nothing to judge.
-      if (!tweet.text && !tweet.quotedText) return;
+      if (!needsModel(settings) || !hasKey) return;
+      if (outbound.has(tweet.id) || inflightIds.has(tweet.id)) return;
 
-      if (article.dataset.ctState === 'pending') return;
-      if (settings.hideUntilChecked) mask(article, tweet.id);
-
-      queue.set(tweet.id, toInput(tweet));
+      if (settings.hideUntilChecked && article.dataset.ctState !== 'pending') {
+        mask(article, tweet.id);
+      }
+      outbound.set(tweet.id, { tweet: toInput(tweet), article });
       scheduleFlush();
     }
 
@@ -168,9 +247,15 @@ export default defineContentScript({
 
     async function flush() {
       const generation = epoch;
-      if (queue.size === 0) return;
-      const tweets = [...queue.values()];
-      queue.clear();
+      if (outbound.size === 0 || ctx.isInvalid) return;
+      const tweets = [...outbound.values()]
+        .map((item) => ({
+          ...item.tweet,
+          priority: priorityOf(item.article, item.tweet.id),
+        }))
+        .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+      outbound.clear();
+      for (const tweet of tweets) inflightIds.add(tweet.id);
 
       let verdicts: Verdict[] = [];
       try {
@@ -190,16 +275,29 @@ export default defineContentScript({
 
       const byId = new Map(verdicts.map((v) => [v.id, v]));
       for (const tweet of tweets) {
+        inflightIds.delete(tweet.id);
         const verdict = byId.get(tweet.id);
         if (!verdict || verdict.error) {
           // Failing open: a post is never hidden because the API broke.
           if (verdict?.error) console.warn('[x-anti-slop]', redactSecrets(verdict.error));
+          decided.set(tweet.id, {
+            id: tweet.id,
+            scores: {},
+            filtered: false,
+            error: verdict?.error ?? 'Classification failed',
+          });
           unmaskById(tweet.id);
           continue;
         }
         decided.set(tweet.id, verdict);
+        noteModel(verdict);
         for (const article of articlesFor(tweet.id)) applyVerdict(article, tweet, verdict);
       }
+    }
+
+    function priorityOf(article: HTMLElement, id: string): number {
+      if (!article.isConnected || article.dataset.ctId !== id) return Number.POSITIVE_INFINITY;
+      return distanceToViewport(article.getBoundingClientRect(), window.innerHeight);
     }
 
     function applyVerdict(article: HTMLElement, tweet: TweetInput, verdict: Verdict) {
@@ -231,7 +329,7 @@ export default defineContentScript({
         if (generation !== epoch) return;
         if (article.dataset.ctId !== id) return;
         if (article.dataset.ctState === 'pending') unmask(article);
-      }, FAILSAFE_MS);
+      }, HIDE_UNTIL_CHECKED_FAILSAFE_MS);
     }
 
     function unmask(article: HTMLElement) {
@@ -300,6 +398,49 @@ export default defineContentScript({
         delete article.dataset.ctState;
       }
     }
+
+    function noteLocal(id: string, filtered: boolean, reason: string) {
+      bumpSession(id, { hidden: filtered, local: true });
+      if (reported.has(id)) return;
+      reported.add(id);
+      localBatch.push({ id, filtered, reason });
+      if (localTimer !== undefined) return;
+      localTimer = ctx.setTimeout(flushLocal, 400);
+    }
+
+    function noteModel(verdict: Verdict) {
+      bumpSession(verdict.id, { hidden: verdict.filtered, cost: verdict.cost ?? 0 });
+    }
+
+    function bumpSession(
+      id: string,
+      fields: { hidden?: boolean; local?: boolean; cost?: number },
+    ) {
+      if (metered.has(id)) return;
+      metered.add(id);
+      session.checked += 1;
+      if (fields.hidden) session.hidden += 1;
+      if (fields.local) session.settledLocally += 1;
+      session.cost += fields.cost ?? 0;
+      meter.update(session);
+    }
+
+    function dropLocalBatch() {
+      localBatch.length = 0;
+      if (localTimer !== undefined) {
+        clearTimeout(localTimer);
+        localTimer = undefined;
+      }
+    }
+
+    function flushLocal() {
+      localTimer = undefined;
+      const decisions = localBatch.splice(0, localBatch.length);
+      if (decisions.length === 0 || ctx.isInvalid) return;
+      browser.runtime.sendMessage({ type: 'recordLocal', decisions }).catch(() => {
+        /* extension context gone; the on-page counts already updated */
+      });
+    }
   },
 });
 
@@ -332,6 +473,18 @@ function toInput(t: Extracted): TweetInput {
   };
 }
 
+function toPrefilter(t: Extracted): PrefilterPost {
+  return {
+    author: t.author,
+    text: t.text,
+    quotedText: t.quotedText,
+    promoted: t.promoted,
+    hasImage: t.media.hasImage,
+    hasVideo: t.media.hasVideo,
+    hasGif: t.media.hasGif,
+  };
+}
+
 function needsModel(s: Settings): boolean {
   return (
     Object.values(s.signals).some((c) => c.enabled) ||
@@ -340,17 +493,10 @@ function needsModel(s: Settings): boolean {
   );
 }
 
-function isAllowlisted(author: string, s: Settings): boolean {
-  if (!author) return false;
-  const handle = author.replace(/^@/, '').toLowerCase();
-  return s.allowlist.some((h) => h.replace(/^@/, '').toLowerCase() === handle);
-}
-
-/** Filters that need no model call. Returns a reason string when it matches. */
-function localVerdict(tweet: Extracted, s: Settings): string | null {
-  if (s.hidePromoted && tweet.promoted) return 'Promoted';
-  if (s.mediaFilters.images && tweet.media.hasImage) return 'Image post';
-  if (s.mediaFilters.videos && tweet.media.hasVideo) return 'Video post';
-  if (s.mediaFilters.gifs && tweet.media.hasGif) return 'GIF post';
-  return null;
+function mutationMatters(mutations: MutationRecord[]): boolean {
+  for (const mutation of mutations) {
+    const node = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
+    if (!node?.closest('.ct-meter')) return true;
+  }
+  return false;
 }

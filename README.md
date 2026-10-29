@@ -9,6 +9,14 @@ Filtered posts collapse to a one-line note with a **Show** button (blur and
 remove are also available). A network error, a bad key, a timeout, or any other
 failure leaves the post visible.
 
+Before any model call the extension applies local rules: accounts you allow or
+block, posts under five words, and a few obvious on-device counts (hashtag
+piles, emoji piles, link dumps, shouting). Posts that still need a model are
+queued about one screen before they scroll into view, closest first. The
+background worker keeps about four requests in flight, gives each attempt about
+two seconds, and backs off on rate limits. A small panel on the timeline shows
+how many posts were checked, hidden, and settled locally, plus an estimated cost.
+
 The extension code is imported from
 [midplane/clean-twitter](https://github.com/midplane/clean-twitter) (MIT,
 Copyright (c) 2026 Nikhil Bafna). See [NOTICE](NOTICE) for credits, including
@@ -91,8 +99,11 @@ policy is in [PRIVACY.md](PRIVACY.md).
 - **Ads and shilling** — sales pitches, affiliate spam, crypto promos
 - **Your own yes/no questions**, written on the options page
 
-**No API call** — read from the page:
+**No API call:**
 
+- Accounts on your blocklist (hidden) or allowlist (left visible)
+- Posts under five words
+- Obvious on-device counts: hashtag piles, emoji piles, link dumps, all-caps shouting
 - Promoted posts
 - Images, videos, or GIFs, if you turn those on
 
@@ -102,12 +113,17 @@ policy is in [PRIVACY.md](PRIVACY.md).
 pnpm lint        # eslint
 pnpm compile     # tsc --noEmit
 pnpm test        # unit tests (bun)
+pnpm measure     # local-settle share and time-to-verdict on the fixture timeline
 pnpm build       # Chrome MV3 → .output/chrome-mv3
 pnpm build:firefox
 ```
 
 `pnpm dev` does not launch a browser. Load `.output/chrome-mv3-dev` unpacked in
 a Chrome profile that is already signed in to X.
+
+`pnpm measure` replays a fixture timeline through the prefilter and the request
+queue. The model leg is a fixed latency (no API key, no network) and the script
+prints the share of posts settled locally and the median time-to-verdict.
 
 `pnpm eval` scores a small labelled set of posts against the live API. It needs
 your own key and is not part of CI:
@@ -120,15 +136,19 @@ PROVIDER=openrouter OPENROUTER_API_KEY=… pnpm eval
 ## Layout
 
 ```
-lib/provider.ts    TypeSafe and OpenRouter calls, questions, retry
-lib/classifier.ts  verdict cache, concurrency, thresholds
-lib/extract.ts     reading posts out of X's DOM
-lib/settings.ts    extension local storage
+lib/provider.ts      TypeSafe and OpenRouter calls, questions, 2s timeout, backoff
+lib/request-queue.ts concurrency, priority, in-flight dedupe, fail-open
+lib/prefilter.ts     allow/block lists, short posts, promoted and media rules
+lib/heuristics.ts    pluggable on-device counts for obvious cases
+lib/viewport.ts      distance-to-viewport priority and prefetch margin
+lib/classifier.ts    verdict cache, thresholds, stats
+lib/extract.ts       reading posts out of X's DOM
+lib/settings.ts      extension local storage
 entrypoints/
-  background.ts    holds the key and is the only caller of the API
-  content/         watches the timeline and applies verdicts
-  popup/           toggles
-  options/         provider, key, filters
+  background.ts      holds the key and is the only caller of the API
+  content/           prefetches the timeline, applies verdicts, shows counts
+  popup/             toggles and usage
+  options/           provider, key, filters, lists
 ```
 
 ## License
