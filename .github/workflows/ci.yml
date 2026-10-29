@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare extension types
+        run: pnpm exec wxt prepare
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm compile
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build Chrome
+        run: pnpm build
+
+      - name: Build Firefox
+        run: pnpm build:firefox
+
+      - name: Confirm loadable builds
+        run: |
+          test -f .output/chrome-mv3/manifest.json
+          test -f .output/firefox-mv2/manifest.json
+          node -e "
+            const chrome = require('./.output/chrome-mv3/manifest.json');
+            const firefox = require('./.output/firefox-mv2/manifest.json');
+            if (chrome.manifest_version !== 3) throw new Error('Chrome build is not MV3');
+            if (firefox.manifest_version !== 2) throw new Error('Firefox build is not MV2');
+            if (chrome.name !== 'x-anti-slop' || firefox.name !== 'x-anti-slop') {
+              throw new Error('manifest name was not rebranded');
+            }
+            const hosts = chrome.host_permissions ?? [];
+            for (const host of ['https://api.typesafe.ai/*', 'https://openrouter.ai/api/*']) {
+              if (!hosts.includes(host)) throw new Error('missing host permission ' + host);
+            }
+          "
