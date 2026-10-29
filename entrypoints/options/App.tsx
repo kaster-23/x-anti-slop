@@ -17,6 +17,7 @@ import {
 } from '@/components/help';
 import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/LabeledSlider';
 import { PresetPicker } from '@/components/PresetPicker';
+import { resetOverlayPosition } from '@/lib/overlay-store';
 import { loadSettings, saveSettings } from '@/lib/settings';
 import { activeKey } from '@/lib/defaults';
 import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
@@ -418,6 +419,24 @@ export default function App() {
           </div>
           <p className="hint mt-8">
             {HIDE_MODES.find((mode) => mode.id === settings.hideMode)?.hint}
+          </p>
+        </div>
+        <div className="field">
+          <div className="field-label">
+            <span>Timeline counts</span>
+          </div>
+          <button
+            type="button"
+            aria-describedby="overlay-position-hint"
+            onClick={() => {
+              void resetOverlayPosition().catch(() => {});
+            }}
+          >
+            Reset overlay position
+          </button>
+          <p id="overlay-position-hint" className="hint mt-6">
+            Puts the on-feed counts back at the bottom left, clear of X's buttons. Double-click the
+            overlay header to do the same.
           </p>
         </div>
       </section>

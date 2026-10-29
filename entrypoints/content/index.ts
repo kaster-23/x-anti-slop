@@ -4,6 +4,7 @@ import { activeCustomFilters } from '@/lib/provider';
 import { DEFAULT_SETTINGS, blankKeys } from '@/lib/defaults';
 import { prefilter, type PrefilterPost } from '@/lib/prefilter';
 import { reportContentFailure, runContentTask, runtimeAlive } from '@/lib/extension-context';
+import { loadOverlayPlacement, overlayStore, saveOverlayPlacement } from '@/lib/overlay-store';
 import { redactSecrets } from '@/lib/redact';
 import type { Settings, TweetInput, Verdict } from '@/lib/types';
 import {
@@ -46,7 +47,12 @@ export default defineContentScript({
 
     let settings = DEFAULT_SETTINGS;
     let hasKey = false;
-    const meter = mountMeter(document);
+    const meter = mountMeter(document, {
+      alive,
+      loadPlacement: loadOverlayPlacement,
+      savePlacement: saveOverlayPlacement,
+      watchPlacement: (onChange) => overlayStore.watch((value) => onChange(value)),
+    });
     const session = { checked: 0, hidden: 0, settledLocally: 0, cost: 0 };
     const metered = new Set<string>();
 
