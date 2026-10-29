@@ -37,12 +37,11 @@ export default function CustomFilters({
     <div className="stack">
       <h3>Your questions</h3>
       <p className="hint">
-        Ask anything you can put as a yes/no question. Each one is answered in the same request,
-        so it adds roughly $0.004 per 1,000 posts.
+        Yes/no questions, answered in the same request. About $0.004 per 1,000 posts.
       </p>
 
       {filters.length === 0 && (
-        <p className="empty">No filters of your own yet.</p>
+        <p className="empty">None yet.</p>
       )}
 
       {filters.map((filter) => (
@@ -59,7 +58,7 @@ export default function CustomFilters({
         />
       ))}
 
-      <div className="row wrap" style={{ marginTop: 14 }}>
+      <div className="row wrap mt-14">
         <button type="button" onClick={add} disabled={filters.length >= MAX_CUSTOM_FILTERS}>
           Add a filter
         </button>
@@ -213,7 +212,7 @@ function FilterRow({
             </div>
             <div className="sub">
               {test.status === 'done' && (
-                <span className={wouldHide ? 'status-err' : 'status-ok'}>
+                <span className={wouldHide ? 'status-err' : undefined}>
                   Scored {Math.round((test.score ?? 0) * 100)}% —{' '}
                   {wouldHide ? 'this post would be hidden' : 'this post would stay'}.
                 </span>

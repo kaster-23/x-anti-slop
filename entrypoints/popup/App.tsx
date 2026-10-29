@@ -6,9 +6,11 @@ import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/Labeled
 import { PresetPicker } from '@/components/PresetPicker';
 import { saveSettings } from '@/lib/settings';
 import { blankKeys, isUsable, THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
-import { presetChangePatch, presetName, presetPatch } from '@/lib/presets';
+import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
 import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
-import type { MediaFilterId, Settings, SignalId, Stats } from '@/lib/types';
+import type { MediaFilterId, PresetId, Settings, SignalId, Stats } from '@/lib/types';
+
+type UndoState = { name: string; patch: Partial<Settings> };
 
 const SIGNAL_IDS: SignalId[] = ['slop', 'ragebait', 'ads'];
 const MEDIA_IDS: MediaFilterId[] = ['images', 'videos', 'gifs'];
@@ -19,6 +21,7 @@ export default function App() {
   const [hasKey, setHasKey] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
   const [apiError, setApiError] = useState<{ message: string } | null>(null);
+  const [undo, setUndo] = useState<UndoState | null>(null);
 
   useEffect(() => {
     browser.runtime
@@ -39,14 +42,30 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  async function update(patch: Partial<Settings>) {
+  async function update(patch: Partial<Settings>, kind: 'edit' | 'preset' | 'undo' = 'edit') {
     if (!settings) return;
-    const nextPatch = presetChangePatch(settings, patch);
+    if (kind === 'edit') setUndo(null);
+    const nextPatch = kind === 'undo' ? patch : presetChangePatch(settings, patch);
     setSettings((prev) => (prev ? { ...prev, ...nextPatch } : prev));
     setSettings(blankKeys(await saveSettings(nextPatch)));
   }
 
-  if (!settings) return <div className="pop"><p className="hint" style={{ padding: 16 }}>Loading…</p></div>;
+  function choosePreset(id: PresetId) {
+    if (!settings) return;
+    if (settings.preset === 'custom') {
+      setUndo({ name: presetName(id), patch: customSnapshot(settings) });
+    }
+    void update(presetPatch(id), 'preset');
+  }
+
+  function undoPreset() {
+    if (!undo) return;
+    const patch = undo.patch;
+    setUndo(null);
+    void update(patch, 'undo');
+  }
+
+  if (!settings) return <div className="pop"><p className="hint pad">Loading…</p></div>;
 
   const customFilters = (settings.customFilters ?? []).filter(isUsable);
   const mode =
@@ -106,7 +125,7 @@ export default function App() {
                 browser.runtime.sendMessage({ type: 'dismissError' }).catch(() => {});
               }}
             >
-              ✕
+              Close
             </button>
           </div>
         </div>
@@ -114,7 +133,7 @@ export default function App() {
 
       {!hasKey && (
         <div className="notice">
-          No API key yet, so the model filters are off.{' '}
+          No API key. Model filters are off.{' '}
           <a href="#" onClick={openOptions}>
             Add a {PROVIDERS[settings.provider].name} key
           </a>
@@ -128,8 +147,10 @@ export default function App() {
           variant="compact"
           preset={settings.preset}
           presetBase={settings.presetBase}
-          onSelect={(id) => update(presetPatch(id))}
+          onSelect={choosePreset}
           onReset={() => update(presetPatch(settings.presetBase))}
+          undoName={undo?.name}
+          onUndo={undoPreset}
         />
       </section>
 
@@ -216,7 +237,7 @@ export default function App() {
             onChange={(minQuality) => update({ minQuality })}
           />
           {settings.minQuality > 0 && (
-            <p className="hint" style={{ marginTop: 6 }}>
+            <p className="hint mt-6">
               Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
             </p>
           )}
@@ -246,7 +267,7 @@ export default function App() {
               />
             );
           })}
-          <p className="hint" style={{ marginTop: 8 }}>
+          <p className="hint mt-8">
             <a href="#" onClick={openOptions}>
               All settings
             </a>

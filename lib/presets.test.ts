@@ -5,8 +5,10 @@ import { SLOP_CATEGORIES } from './detect/score';
 import {
   PRESETS,
   closestPreset,
+  customSnapshot,
   detectPreset,
   getPreset,
+  nextPresetIndex,
   presetChangePatch,
   presetPatch,
   presetValuesOf,
@@ -83,6 +85,7 @@ describe('preset definitions', () => {
     expect(zen.minQuality).toBeGreaterThan(0);
     expect(zen.hideUntilChecked).toBe(true);
     expect(zen.repeatThreshold).toBe(1);
+    expect(getPreset('zen').description).toContain('Adds model calls and may delay posts');
     expect(zen.mediaFilters).toEqual({ images: false, videos: false, gifs: false });
   });
 
@@ -152,6 +155,19 @@ describe('preset detection', () => {
   });
 });
 
+describe('preset focus', () => {
+  test('arrow keys choose a neighbor and do not wrap the meaning into a settings write', () => {
+    expect(nextPresetIndex(4, 0, 'ArrowRight')).toBe(1);
+    expect(nextPresetIndex(4, 0, 'ArrowDown')).toBe(1);
+    expect(nextPresetIndex(4, 0, 'ArrowLeft')).toBe(3);
+    expect(nextPresetIndex(4, 3, 'ArrowRight')).toBe(0);
+    expect(nextPresetIndex(4, 2, 'Home')).toBe(0);
+    expect(nextPresetIndex(4, 0, 'End')).toBe(3);
+    expect(nextPresetIndex(4, 1, 'Enter')).toBeNull();
+    expect(nextPresetIndex(4, 1, ' ')).toBeNull();
+  });
+});
+
 describe('custom switching', () => {
   test('editing a preset knob switches to Custom based on that preset', () => {
     const current = withPreset('light');
@@ -191,6 +207,26 @@ describe('custom switching', () => {
     expect(presetChangePatch(current, { typesafeApiKey: 'apikey_test' })).toEqual({
       typesafeApiKey: 'apikey_test',
     });
+  });
+
+  test('a snapshot of Custom can be written back after a preset is applied', () => {
+    const current = withPreset('light', {
+      preset: 'custom',
+      presetBase: 'light',
+      hidePromoted: true,
+      allowlist: ['friend'],
+    });
+    const snapshot = customSnapshot(current);
+    expect(snapshot.preset).toBe('custom');
+    expect(snapshot.presetBase).toBe('light');
+    expect(snapshot.hidePromoted).toBe(true);
+    expect(snapshot).not.toHaveProperty('allowlist');
+    expect(snapshot).not.toHaveProperty('typesafeApiKey');
+    const restored = { ...withPreset('balanced'), ...snapshot, allowlist: current.allowlist };
+    expect(detectPreset(restored)).toBeNull();
+    expect(restored.preset).toBe('custom');
+    expect(restored.presetBase).toBe('light');
+    expect(restored.allowlist).toEqual(['friend']);
   });
 
   test('reset patch restores the base preset', () => {

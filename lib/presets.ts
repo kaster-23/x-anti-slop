@@ -172,7 +172,7 @@ export const PRESETS: readonly Preset[] = [
     id: 'zen',
     name: 'Zen',
     description:
-      'Hides aggressively: borderline slop, engagement bait, promoted posts, and low-value filler.',
+      'Hides borderline slop, engagement bait, promoted posts, and low-value posts. Adds model calls and may delay posts.',
     values: {
       signals: {
         slop: { enabled: true, threshold: 0.5 },
@@ -344,6 +344,28 @@ function patchTouchesPreset(patch: Partial<Settings>): boolean {
  * onto a card when the result matches one exactly. Edits outside the preset
  * (lists, keys, fitted weights) keep the current mode.
  */
+/** Knobs to restore if the user undoes applying a preset over Custom. */
+export function customSnapshot(settings: Settings): Partial<Settings> {
+  return {
+    ...presetValuesOf(settings),
+    preset: 'custom',
+    presetBase: settings.presetBase,
+  };
+}
+
+/**
+ * Which preset button an arrow key should move focus to.
+ * Applying the preset is a separate click, Enter, or Space.
+ */
+export function nextPresetIndex(count: number, index: number, key: string): number | null {
+  if (count <= 0) return null;
+  if (key === 'ArrowRight' || key === 'ArrowDown') return (index + 1) % count;
+  if (key === 'ArrowLeft' || key === 'ArrowUp') return index <= 0 ? count - 1 : index - 1;
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  return null;
+}
+
 export function presetChangePatch(current: Settings, patch: Partial<Settings>): Partial<Settings> {
   if (!patchTouchesPreset(patch)) return patch;
   const detected = detectPreset({ ...current, ...patch });
