@@ -13,6 +13,7 @@ import {
   type FlaggedAccount,
   type RepeatState,
 } from '@/lib/repeat';
+import { reportContentFailure, runContentTask } from '@/lib/extension-context';
 import { loadRepeat, repeatStore, updateRepeat } from '@/lib/repeat-store';
 import { openXAccountFlow, type AccountAction, type FlowStatus } from '@/lib/x-account-flow';
 
@@ -37,20 +38,52 @@ function rememberCrossing(id: string): void {
  */
 let state: RepeatState = { revision: 0, accounts: [] };
 let rescan: () => void = () => {};
+let alive: () => boolean = () => true;
 
-export async function startOffenders(hooks: { rescan: () => void }): Promise<() => void> {
+export async function startOffenders(hooks: {
+  rescan: () => void;
+  alive: () => boolean;
+}): Promise<() => void> {
   rescan = hooks.rescan;
-  state = await loadRepeat();
-  const unwatch = repeatStore.watch((value) => {
-    const next = normalizeRepeatState(value);
-    // A write this tab just made is already in `state`. A lower or equal
-    // revision is that echo; a higher one came from the settings page.
-    if (next.revision <= state.revision) return;
-    state = next;
-    rescan();
-  });
+  alive = hooks.alive;
+  if (!alive()) return () => {};
+
+  let loaded = false;
+  await runContentTask(
+    true,
+    async () => {
+      state = await loadRepeat();
+      loaded = true;
+    },
+    'repeat-offender memory unavailable',
+  );
+  if (!loaded || !alive()) return () => {};
+
+  let unwatch = () => {};
+  try {
+    unwatch = repeatStore.watch((value) => {
+      try {
+        if (!alive()) return;
+        const next = normalizeRepeatState(value);
+        // A write this tab just made is already in `state`. A lower or equal
+        // revision is that echo; a higher one came from the settings page.
+        if (next.revision <= state.revision) return;
+        state = next;
+        rescan();
+      } catch (err) {
+        reportContentFailure('repeat-offender watch failed', err, alive());
+      }
+    });
+  } catch (err) {
+    reportContentFailure('repeat-offender memory unavailable', err, alive());
+    return () => {};
+  }
   return () => {
-    unwatch();
+    try {
+      unwatch();
+    } catch (err) {
+      reportContentFailure('repeat-offender watch stop failed', err, alive());
+    }
     rescan = () => {};
   };
 }
@@ -120,11 +153,12 @@ function commit(mutator: (current: RepeatState) => RepeatState): void {
   if (mutated === prev) return;
   const hideChanged = hiddenKey(prev) !== hiddenKey(mutated);
   state = { ...mutated, revision: prev.revision + 1 };
+  if (!alive()) return;
   // Queue the write before a rescan, so a scan that records more flags lines
   // up behind this change instead of landing in storage first.
   void updateRepeat(mutator)
     .then((stored) => {
-      if (stored.revision < state.revision) return;
+      if (!alive() || stored.revision < state.revision) return;
       const external = stored.revision > state.revision;
       const hideNow = hiddenKey(state) !== hiddenKey(stored);
       state = stored;
@@ -132,8 +166,9 @@ function commit(mutator: (current: RepeatState) => RepeatState): void {
     })
     .catch((err) => {
       // The in-memory decision already applied. A failed write must not reject
-      // the timeline scan; the next flag tries storage again.
-      console.warn('[x-anti-slop] could not save flagged accounts', err);
+      // the timeline scan; the next flag tries storage again. A reload leaves
+      // this tab's context dead, and that rejection is expected.
+      reportContentFailure('could not save flagged accounts', err, alive());
     });
   if (hideChanged) rescan();
 }
@@ -239,7 +274,7 @@ async function runXAction(root: HTMLElement, article: HTMLElement, action: Accou
   try {
     result = (await openXAccountFlow(document, article, action)).status;
   } catch (err) {
-    console.warn('[x-anti-slop] could not open X account menu', err);
+    reportContentFailure('could not open X account menu', err, alive());
   }
   status.textContent = statusMessage(action, result);
 }

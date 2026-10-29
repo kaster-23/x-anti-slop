@@ -3,6 +3,7 @@ import { TWEET_SELECTOR, extractTweet, readTweetId, type Extracted } from '@/lib
 import { activeCustomFilters } from '@/lib/provider';
 import { DEFAULT_SETTINGS, blankKeys } from '@/lib/defaults';
 import { prefilter, type PrefilterPost } from '@/lib/prefilter';
+import { reportContentFailure, runContentTask, runtimeAlive } from '@/lib/extension-context';
 import { redactSecrets } from '@/lib/redact';
 import type { Settings, TweetInput, Verdict } from '@/lib/types';
 import {
@@ -40,6 +41,9 @@ export default defineContentScript({
   cssInjectionMode: 'manifest',
 
   async main(ctx) {
+    const alive = () => !ctx.isInvalid && runtimeAlive(() => browser.runtime);
+    if (!alive()) return;
+
     let settings = DEFAULT_SETTINGS;
     let hasKey = false;
     const meter = mountMeter(document);
@@ -67,19 +71,21 @@ export default defineContentScript({
     const meterVisible = () => ready && settings.enabled && !onExcludedRoute();
 
     async function applySettings(generation: number) {
+      if (!alive()) return;
       try {
         const next = await loadTimeline();
-        if (generation !== epoch || ctx.isInvalid) return;
+        if (generation !== epoch || !alive()) return;
         settings = next.settings;
         hasKey = next.hasKey;
       } catch (err) {
         // Fail open: a settings read that throws should not leave posts hidden.
-        console.warn('[x-anti-slop] settings load failed', errorText(err));
-        if (generation !== epoch || ctx.isInvalid) return;
+        // A dead context is expected after reload and must not be logged.
+        reportContentFailure('settings load failed', err, alive());
+        if (generation !== epoch || !alive()) return;
         settings = { ...settings, enabled: false };
         hasKey = false;
       }
-      if (generation !== epoch || ctx.isInvalid) return;
+      if (generation !== epoch || !alive()) return;
       ready = true;
       decided.clear();
       outbound.clear();
@@ -100,16 +106,22 @@ export default defineContentScript({
       void applySettings(++epoch);
     };
 
-    browser.runtime.onMessage.addListener(onMessage);
-
     try {
-      const storedLabels = (await browser.runtime.sendMessage({ type: 'getLabels' })) as {
-        labels?: Record<string, 0 | 1>;
-      };
-      for (const [id, label] of Object.entries(storedLabels?.labels ?? {})) labeled.set(id, label);
-    } catch {
-      // The worker is restarting. Marks still save on the next click.
+      if (alive()) browser.runtime.onMessage.addListener(onMessage);
+    } catch (err) {
+      reportContentFailure('could not listen for settings', err, alive());
     }
+
+    await runContentTask(
+      alive(),
+      async () => {
+        const storedLabels = (await browser.runtime.sendMessage({ type: 'getLabels' })) as {
+          labels?: Record<string, 0 | 1>;
+        };
+        for (const [id, label] of Object.entries(storedLabels?.labels ?? {})) labeled.set(id, label);
+      },
+      'could not load labels',
+    );
 
     const observer = new MutationObserver((mutations) => {
       if (!mutationMatters(mutations)) return;
@@ -138,7 +150,9 @@ export default defineContentScript({
 
     try {
       stopOffenders = await startOffenders({
+        alive,
         rescan: () => {
+          if (!alive()) return;
           decided.clear();
           outbound.clear();
           resetAll();
@@ -148,7 +162,7 @@ export default defineContentScript({
     } catch (err) {
       // Repeat-offender memory is optional. A storage failure leaves posts visible
       // to the rest of the filter instead of stopping the content script.
-      console.warn('[x-anti-slop] repeat-offender memory unavailable', err);
+      reportContentFailure('repeat-offender memory unavailable', err, alive());
     }
 
     // A re-injected script (extension reload or update) invalidates this
@@ -158,7 +172,11 @@ export default defineContentScript({
       observer.disconnect();
       io.disconnect();
       window.removeEventListener('resize', onResize);
-      browser.runtime.onMessage.removeListener(onMessage);
+      try {
+        browser.runtime.onMessage.removeListener(onMessage);
+      } catch (err) {
+        reportContentFailure('could not remove settings listener', err, false);
+      }
       meter.remove();
       stopOffenders();
     });
@@ -187,7 +205,7 @@ export default defineContentScript({
     }
 
     function scheduleScan() {
-      if (!ready || ctx.isInvalid) return;
+      if (!ready || !alive()) return;
       if (scanTimer !== undefined) return;
       scanTimer = ctx.setTimeout(() => {
         scanTimer = undefined;
@@ -196,7 +214,7 @@ export default defineContentScript({
     }
 
     function scan() {
-      if (!ready || ctx.isInvalid) return;
+      if (!ready || !alive()) return;
       meter.setVisible(meterVisible());
       if (!settings.enabled || onExcludedRoute()) return;
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
@@ -315,7 +333,7 @@ export default defineContentScript({
 
     async function flush() {
       const generation = epoch;
-      if (outbound.size === 0 || ctx.isInvalid) return;
+      if (outbound.size === 0 || !alive()) return;
       const tweets = [...outbound.values()]
         .map((item) => ({
           ...item.tweet,
@@ -331,15 +349,15 @@ export default defineContentScript({
           verdicts?: Verdict[];
           error?: string;
         };
-        if (generation !== epoch || ctx.isInvalid) return;
+        if (generation !== epoch || !alive()) return;
         verdicts = res?.verdicts ?? [];
         if (res?.error) console.warn('[x-anti-slop]', redactSecrets(res.error));
       } catch (err) {
-        console.warn('[x-anti-slop] classify failed', errorText(err));
-        if (generation !== epoch || ctx.isInvalid) return;
+        reportContentFailure('classify failed', err, alive());
+        if (generation !== epoch || !alive()) return;
       }
 
-      if (generation !== epoch || ctx.isInvalid) return;
+      if (generation !== epoch || !alive()) return;
 
       const byId = new Map(verdicts.map((v) => [v.id, v]));
       for (const tweet of tweets) {
@@ -533,10 +551,12 @@ export default defineContentScript({
     function flushLocal() {
       localTimer = undefined;
       const decisions = localBatch.splice(0, localBatch.length);
-      if (decisions.length === 0 || ctx.isInvalid) return;
-      browser.runtime.sendMessage({ type: 'recordLocal', decisions }).catch(() => {
-        /* extension context gone; the on-page counts already updated */
-      });
+      if (decisions.length === 0 || !alive()) return;
+      void runContentTask(
+        alive(),
+        () => browser.runtime.sendMessage({ type: 'recordLocal', decisions }),
+        'could not record local decisions',
+      );
     }
   },
 });
@@ -571,16 +591,19 @@ function mountLabels(article: HTMLElement, tweet: TweetInput, verdict: Verdict, 
       for (const sibling of bar.querySelectorAll<HTMLButtonElement>('.ct-label')) {
         sibling.setAttribute('aria-pressed', String(sibling === button));
       }
-      browser.runtime
-        .sendMessage({
-          type: 'labelPost',
-          id: tweet.id,
-          label,
-          features: verdict.features,
-          text: tweet.text,
-          author: tweet.author,
-        })
-        .catch(() => {});
+      void runContentTask(
+        runtimeAlive(() => browser.runtime),
+        () =>
+          browser.runtime.sendMessage({
+            type: 'labelPost',
+            id: tweet.id,
+            label,
+            features: verdict.features,
+            text: tweet.text,
+            author: tweet.author,
+          }),
+        'could not save label',
+      );
     });
     bar.append(button);
   }
@@ -598,17 +621,15 @@ function mountLabels(article: HTMLElement, tweet: TweetInput, verdict: Verdict, 
 
 /** Settings and key presence from the background worker. The key itself is never included. */
 async function loadTimeline(): Promise<{ settings: Settings; hasKey: boolean }> {
+  if (!runtimeAlive(() => browser.runtime)) {
+    throw new Error('Extension context invalidated.');
+  }
   const res = (await browser.runtime.sendMessage({ type: 'getPublicSettings' })) as {
     settings?: Settings;
     hasKey?: boolean;
   };
   if (!res?.settings) throw new Error('Settings unavailable');
   return { settings: blankKeys(res.settings), hasKey: res.hasKey === true };
-}
-
-function errorText(err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  return redactSecrets(message);
 }
 
 function toInput(t: Extracted): TweetInput {
