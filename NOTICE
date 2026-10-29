@@ -1,0 +1,37 @@
+x-anti-slop
+=============
+
+This extension hides AI-generated slop posts on X while you scroll. The
+extension code in this repository is imported from clean-twitter and remains
+under that project's MIT license. The copyright notice and permission notice
+are in the LICENSE file and must stay with the code.
+
+clean-twitter
+-------------
+
+https://github.com/midplane/clean-twitter
+
+Copyright (c) 2026 Nikhil Bafna
+
+Licensed under the MIT License. See the LICENSE file in this repository.
+
+The imported project is a WXT + TypeScript + React extension (Chrome MV3 and
+Firefox MV2). It classifies posts with TypeSafe's Jev decision model, reached
+either through the TypeSafe API or through OpenRouter with the user's own key.
+Verdicts are cached by tweet id. Filtered posts can be collapsed, blurred, or
+removed, and collapse/blur leave a Show button.
+
+slop-filter
+-----------
+
+https://github.com/adamnroman/slop-filter
+
+Copyright (c) 2026 Adam Roman
+
+Licensed under the MIT License.
+
+slop-filter is credited here because a later change (FRA-54) will port its
+detection approach: a set of style questions, local counts, and label-fitted
+weights. No source code from that repository is included in this bootstrap.
+When that port lands, the MIT copyright notice for Adam Roman must travel
+with the ported code.
