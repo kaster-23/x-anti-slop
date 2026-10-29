@@ -33,6 +33,6 @@ describe('prefetchRootMargin', () => {
   });
 
   test('the hide-until-checked failsafe outlasts a short request', () => {
-    expect(HIDE_UNTIL_CHECKED_FAILSAFE_MS).toBeGreaterThanOrEqual(8_000);
+    expect(HIDE_UNTIL_CHECKED_FAILSAFE_MS).toBeGreaterThan(12_000);
   });
 });
