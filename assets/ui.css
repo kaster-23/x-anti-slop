@@ -61,11 +61,11 @@ h1 {
 h2,
 h3,
 .group-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--text);
 }
 
 h2 {
@@ -364,21 +364,35 @@ label.check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 1.25rem;
+  height: 1.25rem;
   padding: 0;
   color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--line-strong);
+  background: none;
+  border: none;
   border-radius: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1;
+  opacity: 0;
 }
 
-.tip-btn:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--text);
+.slider-field:hover .tip-btn,
+.slider-field:focus-within .tip-btn,
+.slider-top:hover .tip-btn,
+.slider-top:focus-within .tip-btn,
+.toggle-row:hover .tip-btn,
+.toggle-row:focus-within .tip-btn,
+.field:hover .tip-btn,
+.field:focus-within .tip-btn,
+.field-label:hover .tip-btn,
+.field-label:focus-within .tip-btn,
+.mast:hover .tip-btn,
+.mast:focus-within .tip-btn,
+.tip-btn:hover:not(:disabled),
+.tip-btn:focus-visible {
+  opacity: 1;
+  color: var(--muted);
+  border: none;
 }
 
 .tip-pop {
@@ -430,9 +444,20 @@ label.check {
 
 .slider-top,
 .toggle-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.25rem 3.25rem;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
+}
+
+.slider-top .tip,
+.toggle-row .tip {
+  grid-column: 2;
+  justify-self: center;
+}
+
+.slider-top .slider-value {
+  grid-column: 3;
 }
 
 .slider-label {
@@ -529,8 +554,8 @@ button.preset-row:hover:not(:disabled) {
   color: var(--text);
 }
 
-button.preset-row[aria-checked="true"],
-button.preset-row[aria-checked="true"]:hover:not(:disabled) {
+button.preset-row[aria-pressed="true"],
+button.preset-row[aria-pressed="true"]:hover:not(:disabled) {
   background: var(--fill);
   color: var(--fill-text);
 }
@@ -549,7 +574,7 @@ button.preset-row[aria-checked="true"]:hover:not(:disabled) {
   line-height: 1.4;
 }
 
-button.preset-row[aria-checked="true"] .preset-desc {
+button.preset-row[aria-pressed="true"] .preset-desc {
   color: var(--fill-muted);
 }
 

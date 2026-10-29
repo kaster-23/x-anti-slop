@@ -7,7 +7,7 @@ import { PresetPicker } from '@/components/PresetPicker';
 import { saveSettings } from '@/lib/settings';
 import { blankKeys, isUsable, THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
 import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
-import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
+import { PROVIDERS, QUALITY_LEVELS } from '@/lib/provider';
 import type { MediaFilterId, PresetId, Settings, SignalId, Stats } from '@/lib/types';
 
 type UndoState = { name: string; patch: Partial<Settings> };
@@ -52,9 +52,11 @@ export default function App() {
 
   function choosePreset(id: PresetId) {
     if (!settings) return;
-    if (settings.preset === 'custom') {
-      setUndo({ name: presetName(id), patch: customSnapshot(settings) });
-    }
+    setUndo(
+      settings.preset === 'custom'
+        ? { name: presetName(id), patch: customSnapshot(settings) }
+        : null,
+    );
     void update(presetPatch(id), 'preset');
   }
 
@@ -172,7 +174,7 @@ export default function App() {
         </div>
         <p className="hint total-note">
           Since the counters were reset
-          {stats ? ` · ${formatCost(stats.cost)}` : ''}
+          {stats && stats.cost >= 0.005 ? ` · $${stats.cost.toFixed(2)}` : ''}
         </p>
       </section>
 

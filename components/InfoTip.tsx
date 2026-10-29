@@ -76,7 +76,7 @@ export function InfoTip({
           }
         }}
       >
-        i
+        ?
       </button>
       {open && (
         <span role="tooltip" id={tipId} className="tip-pop">

@@ -27,7 +27,7 @@ export function PresetPicker({
     );
     if (buttons.length === 0) return;
     const active = buttons.findIndex((button) => button === document.activeElement);
-    const checked = buttons.findIndex((button) => button.getAttribute('aria-checked') === 'true');
+    const checked = buttons.findIndex((button) => button.getAttribute('aria-pressed') === 'true');
     const index = active >= 0 ? active : Math.max(0, checked);
     const next = nextPresetIndex(buttons.length, index, event.key);
     if (next === null) return;
@@ -44,11 +44,7 @@ export function PresetPicker({
             Reset to {baseName}
           </button>
         </div>
-      ) : (
-        variant === 'list' && (
-          <p className="hint">Changing a filter switches this to Custom (based on {baseName}).</p>
-        )
-      )}
+      ) : null}
       {undoName && onUndo && (
         <p className="undo-line">
           {undoName} applied.{' '}
@@ -59,7 +55,7 @@ export function PresetPicker({
       )}
       <div
         className={variant === 'list' ? 'preset-list' : 'preset-switch'}
-        role="radiogroup"
+        role="group"
         aria-label="Presets"
         onKeyDown={onKeyDown}
       >
@@ -95,9 +91,8 @@ function PresetOption({
     <button
       type="button"
       className="preset-row"
-      role="radio"
       data-preset={preset.id}
-      aria-checked={selected}
+      aria-pressed={selected}
       tabIndex={tabStop ? 0 : -1}
       onClick={() => onSelect(preset.id)}
     >
