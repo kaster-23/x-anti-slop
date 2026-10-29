@@ -11,6 +11,9 @@ import {
   customKey,
   formatCost,
   hidingMatch,
+  OPENROUTER_REFERER,
+  OPENROUTER_TITLE,
+  openRouterAppHeaders,
   nextRetryDelay,
   readScores,
   resolveModel,
@@ -259,6 +262,18 @@ describe('hidingMatch', () => {
     const match = hidingMatch({ slop: 0.1, ads: 0.9 }, settings);
     expect(match?.label).toBe('Ad');
     expect(match?.score).toBeGreaterThan(0.8);
+  });
+});
+
+describe('OpenRouter app attribution', () => {
+  test('names the privacy page and the extension, not a repository', () => {
+    const headers = openRouterAppHeaders();
+    expect(headers['HTTP-Referer']).toBe('https://x-anti-slop-privacy.vercel.app/');
+    expect(headers['HTTP-Referer']).toBe(OPENROUTER_REFERER);
+    expect(headers['X-Title']).toBe('X-AntiSlop');
+    expect(headers['X-Title']).toBe(OPENROUTER_TITLE);
+    expect(JSON.stringify(headers)).not.toContain('github.com');
+    expect(JSON.stringify(headers)).not.toContain('kaster-23');
   });
 });
 

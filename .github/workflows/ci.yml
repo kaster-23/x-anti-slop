@@ -61,3 +61,7 @@ jobs:
               if (!hosts.includes(host)) throw new Error('missing host permission ' + host);
             }
           "
+          if grep -R -q 'github.com/kaster-23' .output/chrome-mv3; then
+            echo 'built Chrome extension references github.com/kaster-23' >&2
+            exit 1
+          fi

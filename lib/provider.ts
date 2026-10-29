@@ -467,6 +467,17 @@ export function nextRetryDelay(
   return 400 * 2 ** attempt;
 }
 
+/** OpenRouter uses these to attribute traffic. They are optional. */
+export const OPENROUTER_REFERER = 'https://x-anti-slop-privacy.vercel.app/';
+export const OPENROUTER_TITLE = 'X-AntiSlop';
+
+export function openRouterAppHeaders(): Record<string, string> {
+  return {
+    'HTTP-Referer': OPENROUTER_REFERER,
+    'X-Title': OPENROUTER_TITLE,
+  };
+}
+
 /** Retries 429/529/5xx. 401 is a bad key. 422 is a bug. Both fail open. */
 export async function callSystemOne(
   opts: CallOptions,
@@ -477,10 +488,8 @@ export async function callSystemOne(
     'Content-Type': 'application/json',
     Authorization: `Bearer ${opts.apiKey}`,
   };
-  // OpenRouter attributes traffic to an app via these; both are optional.
   if (opts.provider === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://github.com/kaster-23/x-anti-slop';
-    headers['X-Title'] = 'X-AntiSlop';
+    Object.assign(headers, openRouterAppHeaders());
   }
 
   let res: Response;
