@@ -3,6 +3,7 @@ import { browser } from '#imports';
 import { loadSettings, saveSettings } from '@/lib/settings';
 import { PROVIDERS } from '@/lib/provider';
 import CustomFilters from './CustomFilters';
+import RepeatAccounts from './RepeatAccounts';
 import SlopTuning from './SlopTuning';
 import type { HideMode, ProviderId, Settings, Stats } from '@/lib/types';
 
@@ -195,6 +196,11 @@ export default function App() {
           </div>
         </div>
       </section>
+
+      <RepeatAccounts
+        threshold={settings.repeatThreshold}
+        onThreshold={(repeatThreshold) => update({ repeatThreshold })}
+      />
 
       <section className="card">
         <h2>Never filter</h2>

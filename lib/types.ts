@@ -70,6 +70,12 @@ export interface Settings {
   /** Mask posts until a verdict arrives, so filtered posts never flash into view. */
   hideUntilChecked: boolean;
   allowlist: string[];
+
+  /**
+   * Hidden posts from one account before the timeline suggests hiding the rest.
+   * The extension never mutes or blocks; those stay on X's own confirmation.
+   */
+  repeatThreshold: number;
 }
 
 export interface TweetInput {

@@ -72,6 +72,13 @@ accessible to the developer.
   sent again until the questions, weights, or a threshold change
 - **Counters** — how many posts have been checked and filtered, and the
   resulting token spend
+- **Flagged accounts** — the handle, display name, how many of that account's
+  slop or ad posts were hidden, and whether you chose to auto-hide them. At most 200
+  accounts are kept, along with the 50 most recent hidden post ids for each,
+  so the same post is not counted twice. This is used only to suggest hiding
+  a repeat source. It is never sent to the provider. Mute and block, when you
+  choose them, are X's own confirmation screens; the extension does not
+  confirm them.
 - **The most recent API error**, so a failure can be shown in the popup
 - **Marks you set** (AI or Human), with the post text and the feature scores
   used to fit weights. Those stay on this device. Fitting runs locally.

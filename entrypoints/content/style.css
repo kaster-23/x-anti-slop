@@ -76,6 +76,65 @@
   color: rgb(120, 86, 255);
 }
 
+/* Remove-mode hides the whole cell. A suggestion has to stay readable. */
+.ct-removed:has(.ct-suggest) {
+  display: block !important;
+}
+
+.ct-removed:has(.ct-suggest) > :not(.ct-suggest) {
+  display: none !important;
+}
+
+.ct-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 16px;
+  font: 400 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: rgb(15, 20, 25);
+  background: rgba(120, 86, 255, 0.08);
+  border-bottom: 1px solid rgb(239, 243, 244);
+}
+
+.ct-suggest-copy,
+.ct-suggest-status {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+}
+
+.ct-suggest-status {
+  flex-basis: 100%;
+  color: rgb(83, 100, 113);
+}
+
+.ct-suggest-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ct-suggest button {
+  flex: none;
+  padding: 3px 12px;
+  font: inherit;
+  font-weight: 600;
+  color: rgb(83, 100, 113);
+  background: transparent;
+  border: 1px solid rgb(207, 217, 222);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ct-suggest button.ct-suggest-hide,
+.ct-suggest button:hover {
+  color: rgb(120, 86, 255);
+  border-color: rgb(120, 86, 255);
+  background: rgba(120, 86, 255, 0.1);
+}
+
 .ct-labels {
   display: inline-flex;
   align-items: center;
@@ -125,6 +184,24 @@
   .ct-show,
   .ct-label {
     border-color: rgb(83, 100, 113);
+  }
+
+  .ct-suggest {
+    color: rgb(231, 233, 234);
+    background: rgba(120, 86, 255, 0.16);
+    border-bottom-color: rgb(47, 51, 54);
+  }
+
+  .ct-suggest-status,
+  .ct-suggest button {
+    color: rgb(139, 152, 165);
+    border-color: rgb(83, 100, 113);
+  }
+
+  .ct-suggest button.ct-suggest-hide,
+  .ct-suggest button:hover {
+    color: rgb(168, 148, 255);
+    border-color: rgb(168, 148, 255);
   }
 
   .ct-labelbar {

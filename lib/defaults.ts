@@ -6,6 +6,7 @@ import {
   defaultCategorySettings,
   type SlopThresholds,
 } from './detect/score';
+import { DEFAULT_REPEAT_THRESHOLD } from './repeat';
 import type { CustomFilter, Settings, Stats } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hideMode: 'collapse',
   hideUntilChecked: false,
   allowlist: [],
+  repeatThreshold: DEFAULT_REPEAT_THRESHOLD,
 };
 
 /**
