@@ -2,6 +2,9 @@ import { isUsable } from './defaults';
 import { buildStyleQuestions, type SlopPost } from './detect/questions';
 import type { CustomFilter, ProviderId, SignalId, Settings, TweetInput } from './types';
 
+/** Pinned TypeSafe id. `jev-latest` aliases this as of the Oct 2026 models docs. */
+export const JEV_MODEL = 'jev-1.14.0';
+
 /**
  * Jev is reachable two ways. Both take the identical `{model, state, questions}`
  * body and return the identical `{model, answers, usage}` response, so the only
@@ -22,8 +25,7 @@ export const PROVIDERS: Record<
     label: 'TypeSafe (direct)',
     name: 'TypeSafe',
     url: 'https://api.typesafe.ai/v1/systemone',
-    // Versioned id. As of the Oct 2026 models docs, `jev-latest` aliases this.
-    defaultModel: 'jev-1.14.0',
+    defaultModel: JEV_MODEL,
     keysUrl: 'https://console.typesafe.ai/settings/keys',
     keyPrefix: 'apikey_',
   },
@@ -31,7 +33,7 @@ export const PROVIDERS: Record<
     label: 'OpenRouter',
     name: 'OpenRouter',
     url: 'https://openrouter.ai/api/alpha/decisions',
-    // OpenRouter's current model id. `~typesafe/jev-latest` is the floating alias.
+    // OpenRouter's id for the pinned jev-1.14.0. `~typesafe/jev-latest` floats.
     defaultModel: 'typesafe/jev-1.14',
     keysUrl: 'https://openrouter.ai/keys',
     keyPrefix: 'sk-or-',
@@ -55,6 +57,14 @@ function requestSignal(external?: AbortSignal): AbortSignal {
 
 /** $0.042 per million input tokens; output tokens are free. */
 const USD_PER_INPUT_TOKEN = 0.042 / 1_000_000;
+
+/**
+ * An 11th score level is a 422. A smoke test (29 Oct 2026) also showed a
+ * 30-question request has the same warm latency as a 3-question one
+ * (~80–125 ms) at about twice the tokens (~1,070 input tokens per post),
+ * so the style bank goes out as one request.
+ */
+export const MAX_SCORE_LEVELS = 10;
 
 type NoulQuestion = {
   type: 'noul';
@@ -214,6 +224,10 @@ export function buildState(tweet: TweetInput): Record<string, unknown> {
   return state;
 }
 
+/**
+ * Probability that the answer is yes. A noul has no confidence field;
+ * score and choice answers are the ones that carry confidence.
+ */
 export interface NoulAnswer {
   type: 'noul';
   noul: number;
@@ -267,6 +281,54 @@ interface CallOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * The body a smoke test measured: `{ model, state, questions }`, with each
+ * question limited to `{ type, instructions, criteria }`. State is the tweet
+ * (a string, or one object that holds that tweet's text). Questions for
+ * several posts never share a body.
+ */
+export function systemOneBody(
+  model: string,
+  state: unknown,
+  questions: Record<string, Question>,
+): { model: string; state: unknown; questions: Record<string, { type: string; instructions: string; criteria?: unknown }> } {
+  const wire: Record<string, { type: string; instructions: string; criteria?: unknown }> = {};
+  for (const [name, question] of Object.entries(questions)) {
+    if (question.type === 'noul' && question.criteria) {
+      const keys = Object.keys(question.criteria).sort();
+      if (keys.join(',') !== 'false,true') {
+        throw new ProviderError(`Noul question "${name}" criteria must be {true, false}.`, 422, false);
+      }
+    }
+    if (question.type === 'score') {
+      if (!Array.isArray(question.criteria) || question.criteria.some((level) => typeof level !== 'string')) {
+        throw new ProviderError(`Score question "${name}" criteria must be an ordered array of descriptions.`, 422, false);
+      }
+      if (question.criteria.length > MAX_SCORE_LEVELS) {
+        throw new ProviderError(
+          `Score question "${name}" has ${question.criteria.length} levels; Jev accepts at most ${MAX_SCORE_LEVELS}.`,
+          422,
+          false,
+        );
+      }
+    }
+    if (question.type === 'choice') {
+      const criteria = question.criteria;
+      const values = criteria && !Array.isArray(criteria) ? Object.values(criteria) : [];
+      if (!criteria || Array.isArray(criteria) || values.length === 0 || values.some((value) => typeof value !== 'string')) {
+        throw new ProviderError(`Choice question "${name}" criteria must be {option: description}.`, 422, false);
+      }
+    }
+    const entry: { type: string; instructions: string; criteria?: unknown } = {
+      type: question.type,
+      instructions: question.instructions,
+    };
+    if (question.criteria) entry.criteria = question.criteria;
+    wire[name] = entry;
+  }
+  return { model, state, questions: wire };
+}
+
 /** Retries 429/529/5xx with exponential backoff. */
 export async function callSystemOne(
   opts: CallOptions,
@@ -288,11 +350,7 @@ export async function callSystemOne(
     res = await fetch(provider.url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        model: opts.model,
-        state: opts.state,
-        questions: opts.questions,
-      }),
+      body: JSON.stringify(systemOneBody(opts.model, opts.state, opts.questions)),
       signal: requestSignal(opts.signal),
     });
   } catch (err) {

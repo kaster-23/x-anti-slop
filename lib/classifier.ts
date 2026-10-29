@@ -317,14 +317,14 @@ async function withSlot<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Jev evaluates every question against a single `state`, so posts are classified
- * one request at a time rather than batched — batching several posts into one
- * state makes the questions ambiguous about which post they refer to.
+ * One post, one request. The style bank is about 30 questions on that post's
+ * text. A smoke test put a 30-question call at the same warm latency as a
+ * 3-question call (~80–125 ms) and about 1,070 input tokens, so the questions
+ * are not split across requests. Several posts in one state would make the
+ * questions ambiguous about which post they refer to.
  */
 async function classifyOne(tweet: TweetInput, settings: Settings): Promise<Verdict> {
   const post = toSlopPost(tweet);
-  // One post per request. Batching posts into one state makes the questions
-  // ambiguous about which post they refer to.
   const questions = buildQuestions(settings, post);
   if (Object.keys(questions).length === 0) {
     return { id: tweet.id, scores: {}, filtered: false };

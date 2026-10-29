@@ -2,15 +2,29 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { baselineHides, styleDecision } from '../lib/detect/compare';
+import { baselineHides, baselineScoresFrom, styleDecision } from '../lib/detect/compare';
 import { toSlopPost } from '../lib/provider';
 import type { TweetInput } from '../lib/types';
 import { evalModeFromEnv, LIVE_EVAL_COMMAND } from './eval-mode';
 import { SAMPLES } from './samples';
 
+interface NoulFixture {
+  type: 'noul';
+  noul: number;
+}
+interface ScoreFixture {
+  type: 'score';
+  score: number;
+  confidence?: number;
+}
+interface JevFixture {
+  model: string;
+  answers: Record<string, NoulFixture | ScoreFixture>;
+  usage: { input_tokens: number; output_tokens: number };
+}
 interface FixtureSample {
-  baseline: { slop: number; ragebait: number; ads: number };
-  style: Record<string, number>;
+  baseline: JevFixture;
+  style: JevFixture;
 }
 
 describe('eval mode', () => {
@@ -31,6 +45,15 @@ describe('recorded eval', () => {
     const file = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'jev-responses.json');
     const fixture = JSON.parse(readFileSync(file, 'utf8')) as { samples: FixtureSample[] };
     expect(fixture.samples).toHaveLength(SAMPLES.length);
+    for (const row of fixture.samples) {
+      expect(row.baseline.model).toBe('jev-1.14.0');
+      expect(row.style.model).toBe('jev-1.14.0');
+      expect(row.style.usage.input_tokens).toBe(1070);
+      for (const answer of [...Object.values(row.baseline.answers), ...Object.values(row.style.answers)]) {
+        if (answer.type === 'noul') expect(answer).not.toHaveProperty('confidence');
+        if (answer.type === 'score') expect(answer.score).toBeLessThanOrEqual(3);
+      }
+    }
 
     let baselineCorrect = 0;
     let styleCorrect = 0;
@@ -47,9 +70,10 @@ describe('recorded eval', () => {
         isQuote: false,
         parentText: sample.tweet.parentText,
       };
+      const baseline = baselineScoresFrom(row.baseline.answers);
       const wantHide = sample.label === 'junk';
-      if (baselineHides(row.baseline) === wantHide) baselineCorrect++;
-      if (styleDecision(row.style, toSlopPost(tweet), row.baseline).hides === wantHide) styleCorrect++;
+      if (baselineHides(baseline) === wantHide) baselineCorrect++;
+      if (styleDecision(row.style.answers, toSlopPost(tweet), baseline).hides === wantHide) styleCorrect++;
     });
 
     expect(styleCorrect).toBe(SAMPLES.length);
@@ -67,8 +91,9 @@ describe('recorded eval', () => {
       isQuote: false,
       parentText: reply.tweet.parentText,
     };
-    const replyStyle = styleDecision(fixture.samples[13]!.style, toSlopPost(replyTweet), fixture.samples[13]!.baseline);
-    expect(baselineHides(fixture.samples[13]!.baseline)).toBe(false);
+    const replyBaseline = baselineScoresFrom(fixture.samples[13]!.baseline.answers);
+    const replyStyle = styleDecision(fixture.samples[13]!.style.answers, toSlopPost(replyTweet), replyBaseline);
+    expect(baselineHides(replyBaseline)).toBe(false);
     expect(replyStyle.hides).toBe(true);
     expect(replyStyle.botReply).toBe(true);
     expect(replyStyle.slop).toBeGreaterThanOrEqual(0.55);
@@ -85,9 +110,8 @@ describe('recorded eval', () => {
       isReply: false,
       isQuote: false,
     };
-    expect(baselineHides(fixture.samples[14]!.baseline)).toBe(true);
-    expect(styleDecision(fixture.samples[14]!.style, toSlopPost(humanTweet), fixture.samples[14]!.baseline).hides).toBe(
-      false,
-    );
+    const humanBaseline = baselineScoresFrom(fixture.samples[14]!.baseline.answers);
+    expect(baselineHides(humanBaseline)).toBe(true);
+    expect(styleDecision(fixture.samples[14]!.style.answers, toSlopPost(humanTweet), humanBaseline).hides).toBe(false);
   });
 });

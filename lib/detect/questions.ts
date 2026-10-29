@@ -274,12 +274,20 @@ export const STYLE_QUESTIONS: Record<string, StyleQuestion> = {
   },
 };
 
-/** The style bank is one Jev request per post. Parent-only questions stay out
- *  until the replied-to text is actually in the state. */
-export function buildStyleQuestions(post: SlopPost): Record<string, NoulStyleQuestion | ScoreStyleQuestion> {
+/**
+ * Every style question, in one map, so the caller can send them in one Jev
+ * request. A 30-question call is the same warm latency as a 3-question call.
+ * `post` is unused for selection: the parent question goes out even when the
+ * replied-to text is missing, and the scorer ignores that answer in that case.
+ */
+export function buildStyleQuestions(
+  post: SlopPost = { text: '' },
+): Record<string, NoulStyleQuestion | ScoreStyleQuestion> {
+  // The bank does not shrink per post. `post` is accepted so callers pass the
+  // tweet they are about to score in the same request.
+  void post;
   const questions: Record<string, NoulStyleQuestion | ScoreStyleQuestion> = {};
   for (const [id, question] of Object.entries(STYLE_QUESTIONS)) {
-    if (question.needsParent && !post.parentText) continue;
     const body = { ...question };
     delete body.needsParent;
     delete body.typedOnly;

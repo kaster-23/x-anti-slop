@@ -37,24 +37,32 @@ export function baselineHides(scores: BaselineScores, settings: Settings = DEFAU
   );
 }
 
-/** `uniform_cadence` is 0..1. Every other value is a noul. */
-export function styleAnswersFromLevels(levels: Record<string, number>): Record<string, StyleAnswer> {
-  const answers: Record<string, StyleAnswer> = {};
-  for (const [id, value] of Object.entries(levels)) {
-    answers[id] = id === 'uniform_cadence'
-      ? { type: 'score', score: value * 3 }
-      : { type: 'noul', noul: value };
-  }
-  return answers;
+/** Reads a noul probability. Ignores any other field on the answer. */
+export function noulOf(answers: Record<string, { type?: string; noul?: number }>, id: string): number {
+  const answer = answers[id];
+  return answer?.type === 'noul' && typeof answer.noul === 'number' ? answer.noul : 0;
+}
+
+export function baselineScoresFrom(answers: Record<string, { type?: string; noul?: number }>): BaselineScores {
+  return { slop: noulOf(answers, 'slop'), ragebait: noulOf(answers, 'ragebait'), ads: noulOf(answers, 'ads') };
 }
 
 export function styleDecision(
-  levels: Record<string, number>,
+  answers: Record<string, { type?: string; noul?: number; score?: number } | undefined>,
   post: SlopPost,
   others: Pick<BaselineScores, 'ragebait' | 'ads'>,
   settings: Settings = DEFAULT_SETTINGS,
 ): StyleDecision {
-  const features = featureVector(styleAnswersFromLevels(levels), post);
+  // Copy only the probability (noul) or the score. A noul confidence field, if a
+  // caller stuffed one in, is not part of the answer and is not read.
+  const usable: Record<string, StyleAnswer> = {};
+  for (const [id, answer] of Object.entries(answers)) {
+    if (answer?.type === 'noul' && typeof answer.noul === 'number') usable[id] = { type: 'noul', noul: answer.noul };
+    else if (answer?.type === 'score' && typeof answer.score === 'number') {
+      usable[id] = { type: 'score', score: answer.score };
+    }
+  }
+  const features = featureVector(usable, post);
   const judged = judgeSlop(features, resolveWeights(settings.slopWeights), post, slopThresholdsOf(settings));
   const hides =
     judged.filtered ||

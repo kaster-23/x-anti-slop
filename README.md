@@ -59,9 +59,18 @@ itself.
 | TypeSafe (direct) | `https://api.typesafe.ai/v1/systemone` | `jev-1.14.0` | [console.typesafe.ai](https://console.typesafe.ai/settings/keys) |
 | OpenRouter | `https://openrouter.ai/api/alpha/decisions` | `typesafe/jev-1.14` | [openrouter.ai/keys](https://openrouter.ai/keys) |
 
-Both routes take the same `{ model, state, questions }` body. Jev on OpenRouter
-is a decisions model: it is served from `/api/alpha/decisions` and rejected by
-`/api/v1/chat/completions`.
+Both routes take `{ model, state, questions }`. `state` is the tweet text (a
+string, or one object that holds that text). Each question is
+`{ type, instructions, criteria }`. Noul criteria are `{ true, false }` and the
+answer is a probability with no confidence field. Choice criteria are
+`{ option: description }`. Score criteria are an ordered list of at most 10
+levels; an 11th is rejected. The style bank is about 30 questions sent in that
+one request per post: a 30-question call has the same warm latency as a
+3-question call (about 80–125 ms) at about twice the tokens (about 1,070 input
+tokens).
+
+Jev on OpenRouter is a decisions model: it is served from
+`/api/alpha/decisions` and rejected by `/api/v1/chat/completions`.
 
 Leave the model field blank to use the default. The defaults are the current
 versioned ids from the TypeSafe models page and the OpenRouter Jev guide

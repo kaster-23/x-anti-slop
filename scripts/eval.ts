@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { baselineHides, styleDecision } from '../lib/detect/compare';
+import { baselineHides, baselineScoresFrom, styleDecision } from '../lib/detect/compare';
 import { DEFAULT_SETTINGS } from '../lib/defaults';
 import {
   buildBaselineQuestions,
@@ -23,13 +23,15 @@ import {
   resolveModel,
   toSlopPost,
 } from '../lib/provider';
+import type { SystemOneResponse } from '../lib/provider';
 import type { Settings, TweetInput } from '../lib/types';
 import { LIVE_EVAL_COMMAND, evalModeFromEnv } from './eval-mode';
 import { SAMPLES, type Sample } from './samples';
 
 interface FixtureSample {
-  baseline: { slop: number; ragebait: number; ads: number };
-  style: Record<string, number>;
+  /** Recorded `{ model, answers, usage }` bodies. Noul answers are `{ type, noul }` only. */
+  baseline: SystemOneResponse;
+  style: SystemOneResponse;
 }
 
 interface FixtureFile {
@@ -60,35 +62,24 @@ function tweetOf(sample: Sample, index: number): TweetInput {
 async function liveAnswers(sample: Sample, index: number): Promise<FixtureSample> {
   const tweet = tweetOf(sample, index);
   const post = toSlopPost(tweet);
-  const [baselineRes, styleRes] = await Promise.all([
+  // Two calls only because the harness compares two question sets. The extension
+  // sends the style bank once, in a single request, together with rage bait and ads.
+  const [baseline, style] = await Promise.all([
     callSystemOne({
       provider,
-      apiKey: apiKey!,
+      apiKey,
       model,
       state: buildState(tweet),
       questions: buildBaselineQuestions(settings),
     }),
     callSystemOne({
       provider,
-      apiKey: apiKey!,
+      apiKey,
       model,
       state: buildState(tweet),
       questions: buildQuestions(settings, post),
     }),
   ]);
-
-  const baseline = { slop: 0, ragebait: 0, ads: 0 };
-  for (const [key, answer] of Object.entries(baselineRes.answers)) {
-    if (answer.type === 'noul' && (key === 'slop' || key === 'ragebait' || key === 'ads')) {
-      baseline[key] = answer.noul;
-    }
-  }
-  const style: Record<string, number> = {};
-  for (const [key, answer] of Object.entries(styleRes.answers)) {
-    if (key === 'ragebait' || key === 'ads' || key === 'quality') continue;
-    if (answer.type === 'noul') style[key] = answer.noul;
-    else if (answer.type === 'score') style[key] = answer.score / 3;
-  }
   return { baseline, style };
 }
 
@@ -121,8 +112,9 @@ const lines: string[] = [];
 rows.forEach((row, i) => {
   const sample = SAMPLES[i]!;
   const post = toSlopPost(tweetOf(sample, i));
-  const baseHide = baselineHides(row.baseline, settings);
-  const style = styleDecision(row.style, post, row.baseline, settings);
+  const baselineScores = baselineScoresFrom(row.baseline.answers);
+  const baseHide = baselineHides(baselineScores, settings);
+  const style = styleDecision(row.style.answers, post, baselineScores, settings);
   const wantHide = sample.label === 'junk';
   const baseOk = baseHide === wantHide;
   const styleOk = style.hides === wantHide;
@@ -133,7 +125,7 @@ rows.forEach((row, i) => {
     `${mark.padEnd(9)} ${sample.label.padEnd(4)}  ` +
       `base=${baseHide ? 'HIDE' : 'keep'}  style=${style.hides ? 'HIDE' : 'keep'}` +
       `${style.botReply ? ' bot' : '    '}  ` +
-      `slop ${row.baseline.slop.toFixed(2)} → ${style.slop.toFixed(2)}  ` +
+      `slop ${baselineScores.slop.toFixed(2)} → ${style.slop.toFixed(2)}  ` +
       `${sample.tweet.text.replace(/\s+/g, ' ').slice(0, 42)}…`,
   );
 });

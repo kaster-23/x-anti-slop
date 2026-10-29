@@ -33,8 +33,8 @@ function thresholds(patch: Partial<SlopThresholds> = {}): SlopThresholds {
 }
 
 describe('style questions', () => {
-  test('asks about thirty narrow questions, and the parent question only with a parent', () => {
-    expect(styleQuestionCount()).toBe(29);
+  test('asks all thirty narrow questions in one set', () => {
+    expect(styleQuestionCount()).toBe(30);
     expect(styleQuestionCount({ text: 'hi', parentText: 'the post above' })).toBe(30);
     expect(Object.keys(STYLE_QUESTIONS)).toHaveLength(30);
     const withParent = buildStyleQuestions({ text: 'hi', parentText: 'p' });

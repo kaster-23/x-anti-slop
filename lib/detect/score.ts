@@ -170,6 +170,7 @@ export type StyleAnswer = NoulLike | ScoreLike;
 
 function readAnswer(question: StyleQuestion, answer: StyleAnswer | undefined): number {
   if (!answer) return 0;
+  // Noul's only field is the probability. It has no confidence.
   if (question.type === 'noul') return answer.type === 'noul' ? answer.noul : 0;
   if (answer.type !== 'score') return 0;
   const span = question.criteria.length - 1;

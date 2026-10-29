@@ -1,6 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { CUSTOM_PREFIX, PROVIDERS, buildQuestions, buildState, customKey, toQuestion } from './provider';
-import { styleQuestionCount } from './detect/questions';
+import {
+  CUSTOM_PREFIX,
+  JEV_MODEL,
+  MAX_SCORE_LEVELS,
+  PROVIDERS,
+  buildQuestions,
+  buildState,
+  customKey,
+  systemOneBody,
+  toQuestion,
+} from './provider';
+import { STYLE_QUESTIONS, styleQuestionCount } from './detect/questions';
 import { DEFAULT_SETTINGS, isUsable, newCustomFilter } from './defaults';
 import type { CustomFilter, Settings } from './types';
 
@@ -19,7 +29,8 @@ function settingsWith(customFilters: CustomFilter[]): Settings {
 
 describe('default models', () => {
   test('pins the current Jev release instead of a floating alias', () => {
-    expect(PROVIDERS.typesafe.defaultModel).toBe('jev-1.14.0');
+    expect(PROVIDERS.typesafe.defaultModel).toBe(JEV_MODEL);
+    expect(JEV_MODEL).toBe('jev-1.14.0');
     expect(PROVIDERS.openrouter.defaultModel).toBe('typesafe/jev-1.14');
   });
 });
@@ -68,12 +79,58 @@ describe('buildQuestions', () => {
     expect(questions[customKey(evil)]).toBeDefined();
   });
 
-  test('asks the parent question only when the replied-to post is known', () => {
-    expect(buildQuestions(DEFAULT_SETTINGS).pivot_answers_parent).toBeUndefined();
-    expect(
-      buildQuestions(DEFAULT_SETTINGS, { text: 'not that', parentText: 'the claim', isReply: true })
-        .pivot_answers_parent,
-    ).toBeDefined();
+  test('puts all 30 style questions in one map, which is one request', () => {
+    const questions = buildQuestions(DEFAULT_SETTINGS, { text: 'hello' });
+    expect(Object.keys(STYLE_QUESTIONS)).toHaveLength(30);
+    for (const id of Object.keys(STYLE_QUESTIONS)) expect(questions[id]).toBeDefined();
+    expect(questions.reads_as_model?.type).toBe('noul');
+    expect(questions.uniform_cadence?.type).toBe('score');
+    const body = systemOneBody(JEV_MODEL, 'hello', questions);
+    expect(body.model).toBe('jev-1.14.0');
+    expect(body.state).toBe('hello');
+    expect(Object.keys(body.questions)).toHaveLength(Object.keys(questions).length);
+    const reads = questions.reads_as_model;
+    expect(reads).toBeDefined();
+    expect(body.questions.reads_as_model).toEqual({
+      type: 'noul',
+      instructions: reads!.instructions,
+      criteria: reads!.criteria,
+    });
+    for (const question of Object.values(body.questions)) {
+      if (question.type === 'score' && Array.isArray(question.criteria)) {
+        expect(question.criteria.length).toBeLessThanOrEqual(MAX_SCORE_LEVELS);
+      }
+      if (question.type === 'noul' && question.criteria) {
+        expect(Object.keys(question.criteria).sort()).toEqual(['false', 'true']);
+      }
+    }
+  });
+
+  test('refuses an 11th score level before it would 422', () => {
+    expect(() =>
+      systemOneBody(JEV_MODEL, 'hello', {
+        too_many: { type: 'score', instructions: 'How much?', criteria: Array.from({ length: 11 }, (_, i) => `level ${i}`) },
+      }),
+    ).toThrow(/at most 10/);
+  });
+
+  test('choice criteria are option descriptions, not an ordered list', () => {
+    const body = systemOneBody(JEV_MODEL, 'hello', {
+      kind: {
+        type: 'choice',
+        instructions: 'What kind of post is this?',
+        criteria: { human: 'Typed by a person.', model: 'Reads like a language model.' },
+      },
+    });
+    expect(body.questions.kind?.criteria).toEqual({
+      human: 'Typed by a person.',
+      model: 'Reads like a language model.',
+    });
+    expect(() =>
+      systemOneBody(JEV_MODEL, 'hello', {
+        kind: { type: 'choice', instructions: 'What kind?', criteria: ['human', 'model'] as unknown as Record<string, string> },
+      }),
+    ).toThrow(/option: description/);
   });
 
   test('state names post.text and keeps one post per request', () => {
