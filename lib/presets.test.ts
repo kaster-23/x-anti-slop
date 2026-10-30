@@ -289,6 +289,12 @@ describe('migration', () => {
     expect(coerceSettings(stored).preset).toBe('zen');
   });
 
+  test('an untouched install leaves the AI-written trainer off', () => {
+    expect(coerceSettings({}).labeling).toBe(false);
+    expect(coerceSettings({ labeling: true }).labeling).toBe(true);
+    expect(DEFAULT_SETTINGS.labeling).toBe(false);
+  });
+
   test('preserves the API key, lists, and fitted weights while filling new fields', () => {
     const stored = {
       ...withPreset('light'),

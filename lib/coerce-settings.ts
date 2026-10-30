@@ -56,6 +56,7 @@ export function coerceSettings(stored: StoredSettings | null | undefined): Setti
     slopWeights: source.slopWeights ? resolveWeights(source.slopWeights) : null,
     aiWritten: normalizeAiWritten(source.aiWritten),
     hideAiWritten: source.hideAiWritten === true,
+    labeling: typeof source.labeling === 'boolean' ? source.labeling : false,
     hideMode: isHideMode(source.hideMode) ? source.hideMode : DEFAULT_SETTINGS.hideMode,
     cards: normalizeCardAppearance(source.cards),
     replyBotThreshold: clampThreshold(

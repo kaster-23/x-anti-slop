@@ -188,4 +188,4 @@ Text size, card style, and tag colors. These change the card, not the decision. 
 
 AI-written label. On by default. Visible posts at or above the display floor get the pill. Also hide AI-written posts is off in every preset.
 
-AI and Human marks. They teach a later weight fit. They do not change the preset you are on.
+AI and Human marks. Off until you turn them on. They teach the AI-written detector. They do not hide a post, and they do not change the preset you are on.

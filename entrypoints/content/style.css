@@ -217,15 +217,19 @@
 .ct-labels {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   margin-left: auto;
+  opacity: 0.55;
 }
 
 .ct-label-prompt {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.7;
+}
+
+.ct-label-saved {
+  font-size: 11px;
 }
 
 .ct-labelbar {

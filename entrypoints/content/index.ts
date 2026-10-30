@@ -705,17 +705,31 @@ function mountLabels(article: HTMLElement, tweet: TweetInput, verdict: Verdict, 
   const cell = article.closest<HTMLElement>('[data-testid="cellInnerDiv"]') ?? article;
   cell.querySelector('.ct-labelbar')?.remove();
   cell.querySelector('.ct-placeholder .ct-labels')?.remove();
-  if (!enabled || !verdict.features) return;
+  if (!enabled) return;
 
   const bar = document.createElement('span');
   bar.className = 'ct-labels';
+  bar.title = 'Teaches the AI-written detector. Marking a post does not hide it.';
   const prompt = document.createElement('span');
   prompt.className = 'ct-label-prompt';
-  prompt.textContent = 'Mark';
+  prompt.textContent = 'Written by:';
+  const saved = document.createElement('span');
+  saved.className = 'ct-label-saved';
+  saved.hidden = true;
   bar.append(prompt);
+  let flashTimer = 0;
+  const flash = (text: string) => {
+    saved.hidden = false;
+    saved.textContent = text;
+    const view = article.ownerDocument.defaultView;
+    view?.clearTimeout(flashTimer);
+    flashTimer = view?.setTimeout(() => {
+      saved.hidden = true;
+    }, 1200) ?? 0;
+  };
   for (const [label, text] of [
     [1, 'AI'],
-    [0, 'Human'],
+    [0, 'Person'],
   ] as const) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -725,26 +739,32 @@ function mountLabels(article: HTMLElement, tweet: TweetInput, verdict: Verdict, 
     button.addEventListener('click', (event) => {
       event.stopPropagation();
       event.preventDefault();
-      labeled.set(tweet.id, label);
+      const current = labeled.get(tweet.id);
+      const clearing = current === label;
+      if (clearing) labeled.delete(tweet.id);
+      else labeled.set(tweet.id, label);
       for (const sibling of bar.querySelectorAll<HTMLButtonElement>('.ct-label')) {
-        sibling.setAttribute('aria-pressed', String(sibling === button));
+        sibling.setAttribute('aria-pressed', String(!clearing && sibling === button));
       }
       void runContentTask(
         runtimeAlive(() => browser.runtime),
         () =>
-          browser.runtime.sendMessage({
-            type: 'labelPost',
-            id: tweet.id,
-            label,
-            features: verdict.features,
-            text: tweet.text,
-            author: tweet.author,
-          }),
+          clearing
+            ? browser.runtime.sendMessage({ type: 'clearPostLabel', id: tweet.id })
+            : browser.runtime.sendMessage({
+                type: 'labelPost',
+                id: tweet.id,
+                label,
+                features: verdict.features ?? {},
+                text: tweet.text,
+                author: tweet.author,
+              }),
         'could not save label',
-      );
+      ).then(() => flash(clearing ? 'Cleared' : 'Saved'));
     });
     bar.append(button);
   }
+  bar.append(saved);
 
   const placeholder = cell.querySelector('.ct-placeholder');
   if (placeholder) {

@@ -183,6 +183,7 @@ export type Message =
     }
   | { type: 'getLabels' }
   | { type: 'clearLabels' }
+  | { type: 'clearPostLabel'; id: string }
   | { type: 'openOptions' };
 
 export interface Stats {

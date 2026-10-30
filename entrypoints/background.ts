@@ -9,7 +9,7 @@ import {
   resetStats,
 } from '@/lib/classifier';
 import { loadSettings, settingsStore, statsStore } from '@/lib/settings';
-import { clearLabels, labelMarks, saveLabel } from '@/lib/labels';
+import { clearLabels, deleteLabel, labelMarks, saveLabel } from '@/lib/labels';
 import { testCredentials, testFilter } from '@/lib/provider';
 import { activeKey, blankKeys } from '@/lib/defaults';
 import { redactSecrets } from '@/lib/redact';
@@ -110,6 +110,9 @@ async function handle(message: Message) {
       return { labels: await labelMarks() };
     case 'clearLabels':
       await clearLabels();
+      return { ok: true };
+    case 'clearPostLabel':
+      await deleteLabel(message.id);
       return { ok: true };
     case 'openOptions':
       await browser.runtime.openOptionsPage();

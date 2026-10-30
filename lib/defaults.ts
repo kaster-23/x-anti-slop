@@ -28,7 +28,7 @@ export const DEFAULT_SETTINGS: Settings = {
   slopCategories: defaultCategorySettings(),
   replyBotThreshold: DEFAULT_REPLY_BOT_THRESHOLD,
   slopWeights: null,
-  labeling: true,
+  labeling: false,
   aiWritten: { ...DEFAULT_AI_WRITTEN },
   hideAiWritten: false,
 

@@ -115,10 +115,10 @@ export const HIDE_UNTIL_HELP: HelpCopy = {
 };
 
 export const LABELING_HELP: HelpCopy = {
-  label: 'AI and Human marks',
+  label: 'Train the AI-written detector',
   explanation:
-    'Shows AI and Human buttons on posts so you can teach the scorer. The marks stay in this browser. Fitting weights uses them and does not change your preset.',
-  example: 'Example: you mark a polished thread AI and a typo-filled reply Human.',
+    'Shows a row on each post so you can say whether an AI wrote it. The marks stay in this browser. They teach that detector. They do not hide posts.',
+  example: 'Example: AI on a smooth bug note a model wrote. Person on a note you typed. Click the same one again to clear it.',
 };
 
 export const ALLOW_HELP: HelpCopy = {

@@ -30,6 +30,14 @@ export function saveLabel(row: StoredLabel): Promise<void> {
   });
 }
 
+export function deleteLabel(id: string): Promise<void> {
+  return enqueue(async () => {
+    const all = { ...(await labelsStore.getValue()) };
+    delete all[id];
+    await labelsStore.setValue(all);
+  });
+}
+
 export function clearLabels(): Promise<void> {
   return enqueue(async () => {
     await labelsStore.setValue({});
