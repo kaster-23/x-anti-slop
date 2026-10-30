@@ -85,6 +85,34 @@ a:hover {
   color: var(--muted);
 }
 
+.mast-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.autosave {
+  text-align: right;
+}
+
+.autosave-line {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 16px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.autosave.is-quiet .autosave-line {
+  color: var(--muted);
+}
+
+.autosave-hint {
+  margin-top: 2px;
+}
 .hint,
 .sub,
 .caption {

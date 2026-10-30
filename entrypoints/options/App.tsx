@@ -20,9 +20,12 @@ import {
 import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/LabeledSlider';
 import { PresetPicker } from '@/components/PresetPicker';
 import { resetOverlayPosition } from '@/lib/overlay-store';
-import { loadSettings, saveSettings } from '@/lib/settings';
+import { useAutosave } from '@/components/use-autosave';
+import { AutosaveStatus } from '@/components/AutosaveStatus';
+import { shouldDebounceSave } from '@/lib/autosave';
 import { AI_WRITTEN_FLOORS, type AiWrittenFloor } from '@/lib/ai-written';
 import { activeKey } from '@/lib/defaults';
+import { loadSettings, saveSettings } from '@/lib/settings';
 import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
 import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import { parseHandleList } from '@/lib/prefilter';
@@ -57,6 +60,18 @@ export default function App() {
   const [blocklistText, setBlocklistText] = useState('');
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [tab, setTab] = useState<OptionsTab>('filtering');
+  const autosave = useAutosave(async (patch) => {
+    const saved = await saveSettings(patch);
+    setSettings((prev) =>
+      prev
+        ? {
+            ...saved,
+            typesafeApiKey: patch.typesafeApiKey ?? prev.typesafeApiKey,
+            openrouterApiKey: patch.openrouterApiKey ?? prev.openrouterApiKey,
+          }
+        : saved,
+    );
+  });
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -93,18 +108,7 @@ export default function App() {
     if (kind === 'edit') setUndo(null);
     const nextPatch = kind === 'undo' ? patch : presetChangePatch(settings, patch);
     setSettings((prev) => (prev ? { ...prev, ...nextPatch } : prev));
-    const saved = await saveSettings(nextPatch);
-    // saveSettings returns settings with the key removed. Keep the value the
-    // input already has; it is the only extension page that edits it.
-    setSettings((prev) =>
-      prev
-        ? {
-            ...saved,
-            typesafeApiKey: nextPatch.typesafeApiKey ?? prev.typesafeApiKey,
-            openrouterApiKey: nextPatch.openrouterApiKey ?? prev.openrouterApiKey,
-          }
-        : saved,
-    );
+    autosave.submit(nextPatch, kind === 'edit' && shouldDebounceSave(nextPatch));
   }
 
   function choosePreset(id: PresetId) {
@@ -159,9 +163,17 @@ export default function App() {
           <h1>X-AntiSlop</h1>
           <p className="lede">Hides slop, rage bait, and ads on X.</p>
         </div>
-        <p className={`status${hasKey ? ' is-on' : ''}`} role="status">
-          {hasKey ? 'Key connected' : 'No API key'}
-        </p>
+        <div className="mast-side">
+          <AutosaveStatus
+            phase={autosave.phase}
+            showHint={autosave.showHint}
+            hint={autosave.hint}
+            onRetry={autosave.retry}
+          />
+          <p className={`status${hasKey ? ' is-on' : ''}`} role="status">
+            {hasKey ? 'Key connected' : 'No API key'}
+          </p>
+        </div>
       </header>
 
       <OptionsTabs tab={tab} onSelect={selectTab} />
