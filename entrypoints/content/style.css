@@ -327,7 +327,15 @@
   display: none;
 }
 
-.ct-meter .ct-meter-toggle {
+.ct-meter-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.ct-meter .ct-meter-toggle,
+.ct-meter .ct-meter-gear {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -344,7 +352,8 @@
   cursor: pointer;
 }
 
-.ct-meter .ct-meter-toggle:focus-visible {
+.ct-meter .ct-meter-toggle:focus-visible,
+.ct-meter .ct-meter-gear:focus-visible {
   outline: 1px solid currentColor;
   outline-offset: 2px;
 }

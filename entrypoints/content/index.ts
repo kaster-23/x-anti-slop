@@ -58,6 +58,7 @@ export default defineContentScript({
       loadPlacement: loadOverlayPlacement,
       savePlacement: saveOverlayPlacement,
       watchPlacement: (onChange) => overlayStore.watch((value) => onChange(value)),
+      openSettings: () => browser.runtime.sendMessage({ type: 'openOptions' }),
     });
     const session = { checked: 0, hidden: 0, settledLocally: 0, cost: 0 };
     const metered = new Set<string>();

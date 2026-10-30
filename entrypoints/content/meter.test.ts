@@ -331,4 +331,52 @@ describe('timeline overlay', () => {
     expect(root.classList.contains('is-border-paused')).toBe(true);
     meter.remove();
   });
+
+  test('the settings gear does not drag and asks the background to open the page', async () => {
+    const win = desktop();
+    const opened: number[] = [];
+    const meter = mountMeter(win.document as unknown as Document, {
+      ...hooks(),
+      openSettings: async () => {
+        opened.push(1);
+      },
+    });
+    await flush();
+    const root = node(win, '.ct-meter');
+    const gear = node(win, 'button.ct-meter-gear');
+    const before = pointOf(root);
+    gear.dispatchEvent(
+      new win.PointerEvent('pointerdown', { bubbles: true, clientX: 20, clientY: 20, pointerId: 4, button: 0 }),
+    );
+    win.dispatchEvent(
+      new win.PointerEvent('pointermove', { bubbles: true, clientX: 80, clientY: 80, pointerId: 4, button: 0 }),
+    );
+    win.dispatchEvent(
+      new win.PointerEvent('pointerup', { bubbles: true, clientX: 80, clientY: 80, pointerId: 4, button: 0 }),
+    );
+    expect(root.classList.contains('is-dragging')).toBe(false);
+    expect(pointOf(root)).toEqual(before);
+    gear.click();
+    await flush();
+    expect(opened).toEqual([1]);
+    meter.remove();
+  });
+
+  test('a dead context does not throw when the gear is clicked', async () => {
+    const win = desktop();
+    const warn = silenceWarn();
+    const meter = mountMeter(win.document as unknown as Document, {
+      ...hooks(),
+      alive: () => false,
+      openSettings: async () => {
+        throw new Error('Extension context invalidated.');
+      },
+    });
+    await flush();
+    node(win, 'button.ct-meter-gear').click();
+    await flush();
+    expect(warn.logs).toEqual([]);
+    warn.restore();
+    meter.remove();
+  });
 });

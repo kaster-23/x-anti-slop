@@ -37,6 +37,8 @@ export interface MeterHooks {
   loadPlacement: () => Promise<unknown>;
   savePlacement: (placement: OverlayPlacement) => Promise<unknown>;
   watchPlacement: (onChange: (value: unknown) => void) => () => void;
+  /** Opens the settings page. A dead context must reject or no-op without throwing. */
+  openSettings?: () => Promise<unknown>;
 }
 
 /** Movement below this is a click, not a drag, so a double-click can still reset. */
@@ -76,7 +78,17 @@ export function mountMeter(doc: Document, hooks: MeterHooks): Meter {
   toggle.setAttribute('aria-label', 'Collapse timeline counts');
   toggle.textContent = '\u2212';
 
-  header.append(brand, toggle);
+  const gear = doc.createElement('button');
+  gear.type = 'button';
+  gear.className = 'ct-meter-gear';
+  gear.setAttribute('aria-label', 'Settings');
+  gear.textContent = '\u2699';
+
+  const actions = doc.createElement('span');
+  actions.className = 'ct-meter-actions';
+  actions.append(gear, toggle);
+
+  header.append(brand, actions);
 
   const body = doc.createElement('div');
   body.className = 'ct-meter-body';
@@ -245,6 +257,14 @@ export function mountMeter(doc: Document, hooks: MeterHooks): Meter {
 
   toggle.addEventListener('pointerdown', (event) => {
     event.stopPropagation();
+  });
+  gear.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+  });
+  gear.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void runContentTask(hooks.alive(), () => hooks.openSettings?.() ?? Promise.resolve(), 'could not open settings');
   });
   toggle.addEventListener('click', (event) => {
     event.preventDefault();

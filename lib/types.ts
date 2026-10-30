@@ -182,7 +182,8 @@ export type Message =
       author: string;
     }
   | { type: 'getLabels' }
-  | { type: 'clearLabels' };
+  | { type: 'clearLabels' }
+  | { type: 'openOptions' };
 
 export interface Stats {
   checked: number;

@@ -111,6 +111,9 @@ async function handle(message: Message) {
     case 'clearLabels':
       await clearLabels();
       return { ok: true };
+    case 'openOptions':
+      await browser.runtime.openOptionsPage();
+      return { ok: true };
     default:
       return { error: 'Unknown message' };
   }
