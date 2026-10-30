@@ -17,6 +17,7 @@ import { paintFeedCard, restyleFeedCards, setCardAppearance } from './cards';
 import { activeDusts, cancelAllDusts, cancelDust, playDust } from './dust';
 import { hideMotion, isOnScreen } from '@/lib/hide-motion';
 import { clearAiWrittenPill, mountAiWrittenPill } from './ai-pill';
+import { watchHideEffect } from './hide-effect';
 import { mountMeter } from './meter';
 import {
   autoHiddenReason,
@@ -502,6 +503,13 @@ export default defineContentScript({
       });
     }
 
+    const hideWaits = new Map<HTMLElement, () => void>();
+
+    function stopHideWait(cell: HTMLElement) {
+      hideWaits.get(cell)?.();
+      hideWaits.delete(cell);
+    }
+
     function reducedMotion(): boolean {
       try {
         return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -512,6 +520,7 @@ export default defineContentScript({
 
     /** Strips every trace of a previous verdict from a timeline cell. */
     function clearCell(cell: HTMLElement) {
+      stopHideWait(cell);
       cancelDust(cell);
       cell.classList.remove('ct-pending', 'ct-collapsed', 'ct-blurred', 'ct-removed');
       cell.querySelector('.ct-placeholder')?.remove();
@@ -562,6 +571,7 @@ export default defineContentScript({
       show.addEventListener('click', (event) => {
         event.stopPropagation();
         event.preventDefault();
+        stopHideWait(cell);
         cancelDust(cell);
         revealed.add(id);
         cell.classList.remove('ct-collapsed', 'ct-blurred', 'ct-removed');
@@ -600,17 +610,31 @@ export default defineContentScript({
         chrome.colorCoding && chrome.accent
           ? chrome.accent
           : getComputedStyle(article).color || '#e7e9ea';
-      playDust({
-        article,
-        cell,
-        particles: motion.particles,
-        collapse: settings.hideMode === 'collapse',
-        color: ink,
-        onDone: commit,
+      stopHideWait(cell);
+      const stop = watchHideEffect(article, {
+        reducedMotion,
+        onPlay: () => {
+          hideWaits.delete(cell);
+          playDust({
+            article,
+            cell,
+            particles: motion.particles,
+            collapse: settings.hideMode === 'collapse',
+            color: ink,
+            onDone: commit,
+          });
+        },
+        onInstant: () => {
+          hideWaits.delete(cell);
+          commit();
+        },
       });
+      hideWaits.set(cell, stop);
     }
 
     function resetAll() {
+      for (const stop of hideWaits.values()) stop();
+      hideWaits.clear();
       cancelAllDusts();
       for (const cell of document.querySelectorAll<HTMLElement>(
         '.ct-pending, .ct-collapsed, .ct-blurred, .ct-removed',
