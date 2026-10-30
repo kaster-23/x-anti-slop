@@ -121,6 +121,7 @@ export default function App() {
         </label>
         </div>
       </header>
+      <p className="pop-lede">Filters slop, bait, and pitchy ads from an X work feed.</p>
 
       {apiError && (
         <div className="notice error" role="status">
@@ -150,7 +151,7 @@ export default function App() {
 
       {!hasKey && (
         <div className="notice">
-          No API key. Model filters are off.{' '}
+          No key stored. Model scores stay off. On-device counts still run.{' '}
           <a href="#" onClick={openOptions}>
             Add a {PROVIDERS[settings.provider].name} key
           </a>

@@ -97,12 +97,15 @@ export function capScoreCriteria(levels: readonly string[]): string[] {
 export const BASELINE_SLOP_QUESTION: NoulQuestion = {
   type: 'noul',
   instructions:
-    "The post is low-effort AI-generated or engagement-farming 'slop': formulaic thread-bait, " +
-    'hollow motivational platitudes, listicles of truisms, engagement-baiting questions, ' +
-    'or text that reads as machine-written filler.',
+    "The post is low-effort slop or engagement farming: formulaic thread-bait, prompt-bro hustle, " +
+    "a 10-tips thread, 'AI will replace you' bait, a detail-free 'this changes everything' launch, " +
+    'reply-guy agreement, or filler with no specific substance. Code, a stack trace, a benchmark with numbers, ' +
+    'a changelog, an arXiv link, a release post that says what shipped, and terse developer shorthand are not slop, ' +
+    'including when a model drafted them.',
   criteria: {
-    true: 'Formulaic engagement bait or machine-written filler with no specific substance',
-    false: 'A genuine post with specific, concrete substance, however casual',
+    true: 'Prompt-bro hustle, a detail-free launch, reply-guy agreement, or filler with no bug, number, paper, or diff',
+    false:
+      'Code, a stack trace, a benchmark, a changelog, an arXiv link, a release with specifics, or terse dev shorthand',
   },
 };
 
@@ -113,11 +116,11 @@ export const BASELINE_SLOP_QUESTION: NoulQuestion = {
 export const AI_WRITTEN_QUESTION: NoulQuestion = {
   type: 'noul',
   instructions:
-    'Judging only how the text was produced, not whether it is useful: was this post written with an AI writing tool or a language model? A useful post can still be yes. A useless post written by a person is no.',
+    'Judging only how the text was produced, not whether it is useful: was this post written with an AI writing tool or a language model? A useful post can still be yes. Code, a stack trace, a benchmark, a changelog, or terse dev shorthand written by a person is no. A useless post written by a person is no.',
   criteria: {
-    true: 'The prose was produced by a language model or an AI writing tool: smooth, even, assistant-like, or pasted from a chat.',
+    true: 'The prose was produced by a language model or an AI writing tool: smooth, even, assistant-like, or pasted from a chat. A useful model-written changelog is still yes.',
     false:
-      'A person wrote it. Empty, generic, angry, or low-value writing by a person is still no. Specific writing by a person is no.',
+      'A person wrote it. A stack trace, a benchmark, terse dev shorthand, or an angry dunk by a person is still no.',
   },
 };
 
@@ -126,21 +129,22 @@ const SIGNAL_QUESTIONS: Record<Exclude<SignalId, 'slop'>, NoulQuestion> = {
     type: 'noul',
     instructions:
       'The post is rage bait: engineered to provoke outrage, tribal anger, or moral panic ' +
-      'rather than to inform. A factual report, or a specific criticism with evidence, is not rage bait.',
+      'rather than to inform. Ratio-bait dunks and "AI will replace you" outrage with no evidence are rage bait. ' +
+      'A technical disagreement that cites a number, a paper, a diff, a benchmark, or a quote is not.',
     criteria: {
-      true: 'Inflammatory, dunk-y, or manufactured outrage designed to farm angry replies',
-      false: 'Calm, specific, or informative, even when the topic is contentious',
+      true: 'A dunk, a ratio-bait line, or manufactured outrage with no bug, number, paper, or diff',
+      false: 'A specific criticism, including a sharp one, that brings a number, a quote, a paper, or a diff',
     },
   },
   ads: {
     type: 'noul',
     instructions:
-      'The post is a sales pitch: affiliate, dropshipping, crypto or casino shilling, a vague ' +
-      'get-rich offer, or engagement bait whose only point is a click. A concrete product update ' +
-      'or launch with real details is not a pitch just because it names a product.',
+      'The post is a sales pitch: affiliate, dropshipping, crypto or casino shilling, a giveaway, ' +
+      'comment-for-the-prompt farming, prompt-bro hustle, or a detail-free "this changes everything" launch. ' +
+      'A release post, changelog, benchmark, or launch that names what shipped, a version, a metric, or a price is not a pitch.',
     criteria: {
-      true: 'The point of the post is to sell, shill, or farm a click',
-      false: 'Specific and useful, even if it mentions a product, a price, or a launch',
+      true: 'The point is to sell, shill, farm a comment word, or announce a launch with no version, metric, or change',
+      false: 'A release, changelog, benchmark, or launch with a concrete change, even if it names a product or a price',
     },
   },
 };
@@ -155,7 +159,7 @@ export const QUALITY_LEVELS = [
 const QUALITY_QUESTION: ScoreQuestion = {
   type: 'score',
   instructions:
-    'How much a thoughtful reader learns. Specific names, numbers, and a usable point score higher. Vague hype and empty agreement score lower.',
+    'How much a careful technical reader learns. Code, stack traces, benchmarks, changelogs, arXiv links, release notes, and terse dev shorthand score higher. Prompt-bro hustle, detail-free "this changes everything" launches, and reply-guy agreement score lower.',
   criteria: QUALITY_LEVELS,
 };
 

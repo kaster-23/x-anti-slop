@@ -12,7 +12,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: 'X-AntiSlop',
     description:
-      'Hides AI-generated slop posts on X while you scroll, using TypeSafe Jev.',
+      'Filters AI slop, engagement bait, rage bait and pitchy ads from your X work feed. Flags AI-written posts that still add value.',
     permissions: ['storage'],
     host_permissions: [
       // The background worker calls whichever provider the user picked.

@@ -5,6 +5,8 @@ import {
   MAX_SCORE_LEVELS,
   MAX_STATE_CHARS,
   PROVIDERS,
+  BASELINE_SLOP_QUESTION,
+  buildBaselineQuestions,
   buildQuestions,
   buildState,
   capScoreCriteria,
@@ -218,6 +220,33 @@ describe('buildQuestions', () => {
   test('omits the quality question unless a floor is set', () => {
     expect(buildQuestions(DEFAULT_SETTINGS).quality).toBeUndefined();
     expect(buildQuestions({ ...DEFAULT_SETTINGS, minQuality: 1 }).quality).toBeDefined();
+  });
+
+  test('counts code and release detail as value, and prompt-bro hustle as slop', () => {
+    const slop = buildBaselineQuestions(DEFAULT_SETTINGS).slop;
+    expect(slop).toEqual(BASELINE_SLOP_QUESTION);
+    expect(slop?.instructions).toContain('stack trace');
+    expect(slop?.instructions.toLowerCase()).toContain('this changes everything');
+    expect(slop?.instructions).toContain('reply-guy agreement');
+    if (slop?.type === 'noul') {
+      expect(slop.criteria?.false).toContain('changelog');
+      expect(slop.criteria?.true).toContain('Prompt-bro hustle');
+    }
+    const quality = buildQuestions({ ...DEFAULT_SETTINGS, minQuality: 1 }).quality;
+    expect(quality?.type).toBe('score');
+    if (quality?.type === 'score') {
+      expect(quality.instructions).toContain('terse dev shorthand');
+      expect(quality.instructions).toContain('reply-guy agreement');
+    }
+    const ads = buildQuestions(DEFAULT_SETTINGS).ad;
+    expect(ads?.type).toBe('noul');
+    if (ads?.type === 'noul') {
+      expect(ads.instructions).toContain('comment-for-the-prompt');
+      expect(ads.criteria?.false).toContain('changelog');
+    }
+    const rage = buildQuestions(DEFAULT_SETTINGS).ragebait;
+    expect(rage?.type).toBe('noul');
+    if (rage?.type === 'noul') expect(rage.instructions).toContain('Ratio-bait');
   });
 });
 

@@ -19,6 +19,7 @@ describe('preset rule eval', () => {
     expect(pills.precision).toBe(1);
     expect(pills.recall).toBe(1);
     expect(pills.expected).toBeGreaterThanOrEqual(8);
+    expect(FILTER_CORPUS.filter((post) => post.id.startsWith('tech-')).length).toBeGreaterThanOrEqual(30);
   });
 
   test('a higher signal bar never hides more posts, and a higher quality floor never hides fewer', () => {

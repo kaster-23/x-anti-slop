@@ -41,7 +41,7 @@ export default function CustomFilters({
       </p>
 
       {filters.length === 0 && (
-        <p className="empty">None yet.</p>
+        <p className="empty">No questions yet. Each one is a yes/no check in the same model call.</p>
       )}
 
       {filters.map((filter) => (
