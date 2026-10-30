@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { FILTER_CORPUS } from '../test/fixtures/filter-corpus';
 import { newCustomFilter } from '../lib/defaults';
 import { decidePost } from '../lib/rule-decision';
-import { mismatches, scorePreset, settingsFor } from './eval-rules';
+import { mismatches, scorePills, scorePreset, settingsFor } from './eval-rules';
 
 describe('preset rule eval', () => {
   test('the labeled corpus matches every preset', () => {
@@ -13,6 +13,12 @@ describe('preset rule eval', () => {
       expect(row.precision).toBe(1);
       expect(row.recall).toBe(1);
     }
+    const pills = scorePills();
+    expect(pills.falsePositives).toEqual([]);
+    expect(pills.falseNegatives).toEqual([]);
+    expect(pills.precision).toBe(1);
+    expect(pills.recall).toBe(1);
+    expect(pills.expected).toBeGreaterThanOrEqual(8);
   });
 
   test('a higher signal bar never hides more posts, and a higher quality floor never hides fewer', () => {

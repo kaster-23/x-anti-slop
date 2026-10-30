@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { browser } from '#imports';
 import { InfoTip } from '@/components/InfoTip';
 import {
+  AI_WRITTEN_HELP,
+  AI_WRITTEN_HIDE_HELP,
   ALLOW_HELP,
   BLOCK_HELP,
   HIDE_MODE_HELP,
@@ -18,8 +20,12 @@ import {
 import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/LabeledSlider';
 import { PresetPicker } from '@/components/PresetPicker';
 import { resetOverlayPosition } from '@/lib/overlay-store';
-import { loadSettings, saveSettings } from '@/lib/settings';
+import { useAutosave } from '@/components/use-autosave';
+import { AutosaveStatus } from '@/components/AutosaveStatus';
+import { shouldDebounceSave } from '@/lib/autosave';
+import { AI_WRITTEN_FLOORS, type AiWrittenFloor } from '@/lib/ai-written';
 import { activeKey } from '@/lib/defaults';
+import { loadSettings, saveSettings } from '@/lib/settings';
 import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
 import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
 import { parseHandleList } from '@/lib/prefilter';
@@ -54,6 +60,18 @@ export default function App() {
   const [blocklistText, setBlocklistText] = useState('');
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [tab, setTab] = useState<OptionsTab>('filtering');
+  const autosave = useAutosave(async (patch) => {
+    const saved = await saveSettings(patch);
+    setSettings((prev) =>
+      prev
+        ? {
+            ...saved,
+            typesafeApiKey: patch.typesafeApiKey ?? prev.typesafeApiKey,
+            openrouterApiKey: patch.openrouterApiKey ?? prev.openrouterApiKey,
+          }
+        : saved,
+    );
+  });
 
   useEffect(() => {
     loadSettings().then((s) => {
@@ -90,18 +108,7 @@ export default function App() {
     if (kind === 'edit') setUndo(null);
     const nextPatch = kind === 'undo' ? patch : presetChangePatch(settings, patch);
     setSettings((prev) => (prev ? { ...prev, ...nextPatch } : prev));
-    const saved = await saveSettings(nextPatch);
-    // saveSettings returns settings with the key removed. Keep the value the
-    // input already has; it is the only extension page that edits it.
-    setSettings((prev) =>
-      prev
-        ? {
-            ...saved,
-            typesafeApiKey: nextPatch.typesafeApiKey ?? prev.typesafeApiKey,
-            openrouterApiKey: nextPatch.openrouterApiKey ?? prev.openrouterApiKey,
-          }
-        : saved,
-    );
+    autosave.submit(nextPatch, kind === 'edit' && shouldDebounceSave(nextPatch));
   }
 
   function choosePreset(id: PresetId) {
@@ -156,9 +163,17 @@ export default function App() {
           <h1>X-AntiSlop</h1>
           <p className="lede">Hides slop, rage bait, and ads on X.</p>
         </div>
-        <p className={`status${hasKey ? ' is-on' : ''}`} role="status">
-          {hasKey ? 'Key connected' : 'No API key'}
-        </p>
+        <div className="mast-side">
+          <AutosaveStatus
+            phase={autosave.phase}
+            showHint={autosave.showHint}
+            hint={autosave.hint}
+            onRetry={autosave.retry}
+          />
+          <p className={`status${hasKey ? ' is-on' : ''}`} role="status">
+            {hasKey ? 'Key connected' : 'No API key'}
+          </p>
+        </div>
       </header>
 
       <OptionsTabs tab={tab} onSelect={selectTab} />
@@ -223,6 +238,55 @@ export default function App() {
           );
         })}
 
+        <h3>
+          <span className="field-label">
+            AI-written label
+            <InfoTip
+              label={AI_WRITTEN_HELP.label}
+              explanation={AI_WRITTEN_HELP.explanation}
+              example={AI_WRITTEN_HELP.example}
+            />
+          </span>
+        </h3>
+        <div className="toggle-list">
+          <ToggleRow
+            id="ai-written-show"
+            label="Show the label"
+            explanation={AI_WRITTEN_HELP.explanation}
+            example={AI_WRITTEN_HELP.example}
+            tipKey="ai-written"
+            checked={settings.aiWritten.show}
+            onChange={(show) => update({ aiWritten: { ...settings.aiWritten, show } })}
+          />
+        </div>
+        <div className="field-label">
+          <span id="ai-written-floor-label">Show from</span>
+        </div>
+        <div className="seg" role="group" aria-labelledby="ai-written-floor-label">
+          {AI_WRITTEN_FLOORS.map((floor) => (
+            <button
+              key={floor}
+              type="button"
+              aria-pressed={settings.aiWritten.floor === floor}
+              onClick={() => update({ aiWritten: { ...settings.aiWritten, floor: floor as AiWrittenFloor } })}
+            >
+              {Math.round(floor * 100)}%
+            </button>
+          ))}
+        </div>
+        <p className="hint">Visible posts at or above this get a small AI label. Hidden posts do not.</p>
+        <div className="toggle-list">
+          <ToggleRow
+            id="ai-written-hide"
+            label={AI_WRITTEN_HIDE_HELP.label}
+            explanation={AI_WRITTEN_HIDE_HELP.explanation}
+            example={AI_WRITTEN_HIDE_HELP.example}
+            tipKey="ai-written-hide"
+            checked={settings.hideAiWritten}
+            onChange={(hideAiWritten) => update({ hideAiWritten })}
+          />
+        </div>
+
         <div className="toggle-list">
           <ToggleRow
             id="hide-promoted"
@@ -252,7 +316,7 @@ export default function App() {
           })}
         </div>
 
-        <div className="mt-18">
+        <div className="stack-5">
           <LabeledSlider
             id="repeat-threshold"
             label={REPEAT_HELP.label}
@@ -273,7 +337,7 @@ export default function App() {
 
         <h3 className="group-label">Writing-style buckets</h3>
         <p className="hint">A bucket hides a post when its strongest tell clears this bar.</p>
-        <div className="mt-12">
+        <div className="stack-3">
           <SlopBuckets settings={settings} onChange={update} />
         </div>
 
@@ -284,7 +348,7 @@ export default function App() {
           </summary>
           <div className="advanced-body">
             <SlopAdvanced settings={settings} onChange={update} />
-            <div className="mt-16">
+            <div className="stack-4">
               <LabeledSlider
                 id="quality"
                 label={QUALITY_HELP.label}
@@ -303,12 +367,12 @@ export default function App() {
                 onChange={(minQuality) => update({ minQuality })}
               />
               {settings.minQuality > 0 && (
-                <p className="hint mt-6">
+                <p className="hint stack-2">
                   Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
                 </p>
               )}
             </div>
-            <div className="mt-16">
+            <div className="stack-4">
               <ToggleRow
                 id="hide-until"
                 label={HIDE_UNTIL_HELP.label}
@@ -319,7 +383,7 @@ export default function App() {
                 onChange={(hideUntilChecked) => update({ hideUntilChecked })}
               />
             </div>
-            <div className="mt-18">
+            <div className="stack-5">
               <CustomFilters
                 filters={settings.customFilters}
                 onChange={(customFilters) => update({ customFilters })}
@@ -357,7 +421,7 @@ export default function App() {
           onChange={(e) => setAllowlistText(e.target.value)}
           onBlur={() => update({ allowlist: parseHandleList(allowlistText) })}
         />
-        <p className="hint mt-6">One handle per line. These accounts skip every filter.</p>
+        <p className="hint stack-2">One handle per line. These accounts skip every filter.</p>
 
         <h3>
           <span className="field-label">
@@ -373,13 +437,13 @@ export default function App() {
           onChange={(e) => setBlocklistText(e.target.value)}
           onBlur={() => update({ blocklist: parseHandleList(blocklistText) })}
         />
-        <p className="hint mt-6">
+        <p className="hint stack-2">
           One handle per line. These accounts are hidden, and the post is not sent to the model.
           Posts under five words stay visible without a model call. Hashtag piles, emoji piles,
           link dumps, and all-caps shouting are hidden on this device.
         </p>
 
-        <div className="mt-18">
+        <div className="stack-5">
           <RepeatAccounts threshold={settings.repeatThreshold} />
         </div>
       </section>
@@ -418,7 +482,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <p className="hint mt-8">
+          <p className="hint stack-2">
             {HIDE_MODES.find((mode) => mode.id === settings.hideMode)?.hint}
           </p>
         </div>
@@ -435,7 +499,7 @@ export default function App() {
           >
             Reset overlay position
           </button>
-          <p id="overlay-position-hint" className="hint mt-6">
+          <p id="overlay-position-hint" className="hint stack-2">
             Puts the on-feed counts back at the bottom left, clear of X's buttons. Double-click the
             overlay header to do the same.
           </p>
@@ -503,7 +567,7 @@ export default function App() {
               {test.status === 'testing' ? 'Testing…' : 'Test'}
             </button>
           </div>
-          <p className="hint mt-6">
+          <p className="hint stack-2">
             {test.status === 'ok' && <span>{test.message}</span>}
             {test.status === 'error' && <span className="status-err">{test.message}</span>}
             {test.status !== 'ok' && test.status !== 'error' && (
@@ -535,7 +599,7 @@ export default function App() {
             value={settings.model}
             onChange={(e) => update({ model: e.target.value })}
           />
-          <p className="hint mt-6">Blank uses the default.</p>
+          <p className="hint stack-2">Blank uses the default.</p>
         </div>
       </section>
 
@@ -564,14 +628,14 @@ export default function App() {
             </div>
           </div>
           {Object.keys(stats.bySignal).length > 0 && (
-            <p className="hint mt-10">
+            <p className="hint stack-3">
               {Object.entries(stats.bySignal)
                 .sort((a, b) => b[1] - a[1])
                 .map(([label, n]) => `${label}: ${n}`)
                 .join(' · ')}
             </p>
           )}
-          <div className="row wrap mt-14">
+          <div className="row wrap stack-4">
             <button
               type="button"
               onClick={async () => {

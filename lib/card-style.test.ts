@@ -17,6 +17,7 @@ import {
 describe('tag colors', () => {
   test('maps each filter reason onto its tag, and leaves a custom label on Custom', () => {
     expect(tagForReason('AI slop (92%)').id).toBe('slop');
+    expect(tagForReason('AI written (72%)').id).toBe('aiWritten');
     expect(tagForReason('Rage bait (80%)').id).toBe('ragebait');
     expect(tagForReason('Ad (70%)').id).toBe('ad');
     expect(tagForReason('Promotional (66%)').id).toBe('promotional');

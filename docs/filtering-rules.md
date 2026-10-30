@@ -15,9 +15,24 @@ Promoted is not a kind of writing. It is a label the site puts on a paid placeme
 
 Every score runs from 0 to 1. The bar is the minimum score that hides. A higher bar hides fewer posts. A lower bar hides more. Turning a signal off hides none of that kind, whatever the score. These directions never reverse.
 
+## AI-written and AI slop
+
+Two scores, from the same model call.
+
+AI-written is how the text was produced. 0 is a person. 1 is a language model or an AI writing tool. It does not say whether the post is worth reading.
+
+AI slop is a post that adds no value, whoever wrote it. 0 is a specific, usable post. 1 is filler. A person can write slop. A model can write something worth keeping.
+
+| | Adds no value | Adds value |
+| --- | --- | --- |
+| AI-written | Hide as slop. No label, because the post is not left up. Example: “Let’s unpack this. The real lesson is the mindset. Agree?” | Leave it up. Show the label once the score clears the display floor. Example: “Rotated session tokens every 12 hours and bound them to the device id. p95 auth fell from 800ms to 220ms.” |
+| Written by a person | Hide as slop when the value score clears the bar. No AI label. Example: “Wow. Just wow. Honestly. Yeah. So true. Follow for more.” | Leave it up. No AI label. Example: “The bug was a stale closure. p95 fell from 800ms to 220ms.” |
+
+The label is a small monochrome pill, “AI 72%”, near the post header. Its tooltip says the post is shown, not hidden, because it adds value. Show from is 50, 70, or 90 percent. The default is 50. Every preset leaves “Also hide AI-written posts” off, so authorship alone never hides a post unless that switch is turned on.
+
 ## AI slop
 
-Machine-written filler: tidy lessons, announced insights, chatbot leftovers, and threads that could be pasted under any topic.
+A post that adds no value, whoever wrote it: tidy lessons, announced insights, chatbot leftovers, and threads that could be pasted under any topic. Being written with AI is a separate score and does not, by itself, make a post slop.
 
 Hide: "Let's unpack this. The real lesson is the mindset. Agree?"
 
@@ -169,6 +184,8 @@ When a post is filtered. Collapse leaves a one-line note. Blur keeps the post in
 
 Hide animation. Particles, blur, or off. This changes how a visible post leaves. It does not change the verdict.
 
-Text size, card style, and tag colors. These change the card, not the decision.
+Text size, card style, and tag colors. These change the card, not the decision. AI written is one of the tag colors. The pill on a visible post stays monochrome.
 
-AI and Human marks. They teach a later weight fit. They do not change the preset you are on.
+AI-written label. On by default. Visible posts at or above the display floor get the pill. Also hide AI-written posts is off in every preset.
+
+AI and Human marks. Off until you turn them on. They teach the AI-written detector. They do not hide a post, and they do not change the preset you are on.

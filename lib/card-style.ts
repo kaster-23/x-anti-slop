@@ -8,6 +8,7 @@
 
 export type CardTagId =
   | 'slop'
+  | 'aiWritten'
   | 'ragebait'
   | 'ad'
   | 'promotional'
@@ -44,6 +45,8 @@ export interface CardAppearance {
   textSize: CardTextSize;
   /** Particles and blur when a verdict hides a post that is already on screen. */
   hideAnimation: HideAnimation;
+  /** Slow silver line around the timeline counts. On by default. */
+  animatedBorder: boolean;
   colors: Record<CardTagId, string>;
 }
 
@@ -54,6 +57,7 @@ interface TagSpec extends CardTag {
 
 export const CARD_TAGS: readonly TagSpec[] = [
   { id: 'slop', label: 'AI slop', reasons: ['ai slop'] },
+  { id: 'aiWritten', label: 'AI written', reasons: ['ai written'] },
   { id: 'ragebait', label: 'Rage bait', reasons: ['rage bait'] },
   { id: 'ad', label: 'Engagement bait', reasons: ['ad'] },
   { id: 'promotional', label: 'Ads', reasons: ['promotional'] },
@@ -76,6 +80,7 @@ export const CARD_TAGS: readonly TagSpec[] = [
  */
 export const DEFAULT_TAG_COLORS: Record<CardTagId, string> = {
   slop: '#8aa4b8',
+  aiWritten: '#9aa3ad',
   ragebait: '#c47a72',
   ad: '#c4a36a',
   promotional: '#a89468',
@@ -97,6 +102,7 @@ export const DEFAULT_CARD_APPEARANCE: CardAppearance = {
   style: 'solid',
   textSize: 'medium',
   hideAnimation: 'particles',
+  animatedBorder: true,
   colors: { ...DEFAULT_TAG_COLORS },
 };
 
@@ -203,6 +209,7 @@ export function normalizeCardAppearance(raw: unknown): CardAppearance {
         ? source.textSize
         : DEFAULT_CARD_APPEARANCE.textSize,
     hideAnimation: normalizeHideAnimation(source.hideAnimation),
+    animatedBorder: typeof source.animatedBorder === 'boolean' ? source.animatedBorder : DEFAULT_CARD_APPEARANCE.animatedBorder,
     colors: next,
   };
 }

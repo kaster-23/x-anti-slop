@@ -1,3 +1,4 @@
+import type { AiWrittenSettings } from './ai-written';
 import type { CardAppearance } from './card-style';
 import type { CategorySetting, SlopCategory, SlopWeights } from './detect/score';
 
@@ -61,6 +62,18 @@ export interface Settings {
 
   /** Show AI / Human marks on posts, and store them locally. */
   labeling: boolean;
+
+  /**
+   * The on-timeline label for posts a model likely wrote. Not a preset knob:
+   * the display floor and the on/off switch stay when a preset changes.
+   */
+  aiWritten: AiWrittenSettings;
+
+  /**
+   * Hide posts at or above the AI-written floor even when they add value.
+   * Off in every preset. Turning it on leaves the named preset.
+   */
+  hideAiWritten: boolean;
 
   /** Drop anything rated below this on the 0-3 quality scale. 0 disables. */
   minQuality: number;
@@ -169,7 +182,9 @@ export type Message =
       author: string;
     }
   | { type: 'getLabels' }
-  | { type: 'clearLabels' };
+  | { type: 'clearLabels' }
+  | { type: 'clearPostLabel'; id: string }
+  | { type: 'openOptions' };
 
 export interface Stats {
   checked: number;

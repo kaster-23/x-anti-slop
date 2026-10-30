@@ -51,7 +51,7 @@ export default function CardAppearance({
         example="Off keeps the same cards in grayscale."
         tipKey="card-colors"
       />
-      <div className="seg mt-14" role="group" aria-labelledby="card-style-label">
+      <div className="seg stack-4" role="group" aria-labelledby="card-style-label">
         {STYLES.map((style) => (
           <button
             key={style.id}
@@ -63,8 +63,8 @@ export default function CardAppearance({
           </button>
         ))}
       </div>
-      <p className="hint mt-8">Solid fills the tag chip. Subtle leaves it as an outline.</p>
-      <div className="field-label mt-14">
+      <p className="hint stack-2">Solid fills the tag chip. Subtle leaves it as an outline.</p>
+      <div className="field-label stack-4">
         <span id="hide-animation-label">Hide animation</span>
       </div>
       <div className="seg" role="group" aria-labelledby="hide-animation-label">
@@ -79,10 +79,19 @@ export default function CardAppearance({
           </button>
         ))}
       </div>
-      <p className="hint mt-8">
+      <p className="hint stack-2">
         Particles and blur are separate. Either plays only for a post already on screen. Reduced motion hides it at once.
       </p>
-      <div className="field-label mt-14">
+      <ToggleRow
+        id="animated-border"
+        label="Animated border"
+        checked={cards.animatedBorder}
+        onChange={(animatedBorder) => onChange({ ...cards, animatedBorder })}
+        explanation="A thin silver line turns slowly around the timeline counts, including the collapsed pill. It pauses when the tab is hidden and when motion is reduced."
+        example="Off leaves the same panel with a still border."
+        tipKey="animated-border"
+      />
+      <div className="field-label stack-4">
         <span id="card-text-size-label">Text size</span>
       </div>
       <div className="seg" role="group" aria-labelledby="card-text-size-label">
@@ -97,7 +106,7 @@ export default function CardAppearance({
           </button>
         ))}
       </div>
-      <div className="tag-colors mt-14">
+      <div className="tag-colors stack-4">
         {CARD_TAGS.map((tag) => {
           const color = cards.colors[tag.id];
           const base = DEFAULT_TAG_COLORS[tag.id];

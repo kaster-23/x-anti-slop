@@ -11,8 +11,8 @@ export const SIGNAL_HELP: Record<SignalId, HelpCopy> = {
   slop: {
     label: 'AI slop',
     explanation:
-      'Hide machine-written filler. Keep a post with a name, a number, or a thing that happened.',
-    example: 'Hide: “Let’s unpack the mindset.” Keep: “p95 fell from 800ms to 220ms.”',
+      'Hide a post that adds no value, whoever wrote it. Keep a post with a name, a number, or a thing that happened.',
+    example: 'Hide: “Let’s unpack the mindset.” Keep: “p95 fell from 800ms to 220ms,” even if a model wrote it.',
   },
   ragebait: {
     label: 'Rage bait',
@@ -115,10 +115,10 @@ export const HIDE_UNTIL_HELP: HelpCopy = {
 };
 
 export const LABELING_HELP: HelpCopy = {
-  label: 'AI and Human marks',
+  label: 'Train the AI-written detector',
   explanation:
-    'Shows AI and Human buttons on posts so you can teach the scorer. The marks stay in this browser. Fitting weights uses them and does not change your preset.',
-  example: 'Example: you mark a polished thread AI and a typo-filled reply Human.',
+    'Shows a row on each post so you can say whether an AI wrote it. The marks stay in this browser. They teach that detector. They do not hide posts.',
+  example: 'Example: AI on a smooth bug note a model wrote. Person on a note you typed. Click the same one again to clear it.',
 };
 
 export const ALLOW_HELP: HelpCopy = {
@@ -159,6 +159,20 @@ export const MODEL_HELP: HelpCopy = {
   explanation:
     'Leave this blank to use the pinned Jev id for the provider. A floating name such as jev-latest is rewritten to that pinned id.',
   example: 'Example: blank uses jev-1.14.0 on TypeSafe and typesafe/jev-1.14 on OpenRouter.',
+};
+
+export const AI_WRITTEN_HELP: HelpCopy = {
+  label: 'AI-written label',
+  explanation:
+    'AI-written is how the text was produced. AI slop is a post that adds no value, whoever wrote it. The label marks a visible post. It does not hide it.',
+  example: 'A model can write “p95 fell from 800ms to 220ms.” That stays up, with a small AI label.',
+};
+
+export const AI_WRITTEN_HIDE_HELP: HelpCopy = {
+  label: 'Also hide AI-written posts',
+  explanation:
+    'Hides posts at or above the Show from bar because an AI wrote them, even when they add value. Off in every preset.',
+  example: 'On, at 50%: a useful model-written bug note is hidden. Off: it stays, with the label.',
 };
 
 export const ENABLED_HELP: HelpCopy = {

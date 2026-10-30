@@ -106,6 +106,21 @@ export const BASELINE_SLOP_QUESTION: NoulQuestion = {
   },
 };
 
+/**
+ * Authorship only. A useful post can still be yes, and a worthless post a
+ * person wrote is no. The slop score, from the style bank, judges value.
+ */
+export const AI_WRITTEN_QUESTION: NoulQuestion = {
+  type: 'noul',
+  instructions:
+    'Judging only how the text was produced, not whether it is useful: was this post written with an AI writing tool or a language model? A useful post can still be yes. A useless post written by a person is no.',
+  criteria: {
+    true: 'The prose was produced by a language model or an AI writing tool: smooth, even, assistant-like, or pasted from a chat.',
+    false:
+      'A person wrote it. Empty, generic, angry, or low-value writing by a person is still no. Specific writing by a person is no.',
+  },
+};
+
 const SIGNAL_QUESTIONS: Record<Exclude<SignalId, 'slop'>, NoulQuestion> = {
   ragebait: {
     type: 'noul',
@@ -180,6 +195,7 @@ export function buildQuestions(
   post: SlopPost = { text: '' },
 ): Record<string, Question> {
   const questions: Record<string, Question> = {};
+  if (settings.aiWritten.show || settings.hideAiWritten) questions.aiWritten = AI_WRITTEN_QUESTION;
   if (settings.signals.ragebait.enabled) questions.ragebait = SIGNAL_QUESTIONS.ragebait;
   if (settings.signals.ads.enabled || settings.signals.slop.enabled) questions.ad = SIGNAL_QUESTIONS.ads;
   if (settings.signals.slop.enabled) Object.assign(questions, buildStyleQuestions(post));

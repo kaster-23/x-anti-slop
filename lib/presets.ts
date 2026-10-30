@@ -3,10 +3,12 @@
  *
  * A preset is a complete set of values for every knob that changes what gets
  * hidden: signal thresholds, writing-style buckets, promoted and media toggles,
- * the repeat-offender bar, hide mode, and the related switches. It does not
- * touch the API key, provider, model, allowlist, blocklist, filters the user
- * wrote, the on/off switch, fitted weights, or the AI/Human marking tools.
- * Those belong to the person, not to the preset.
+ * the repeat-offender bar, hide mode, the related switches, and whether
+ * AI-written posts are hidden. It does not touch the API key, provider, model,
+ * allowlist, blocklist, filters the user wrote, the on/off switch, fitted
+ * weights, the AI/Human marking tools, or the AI-written label (on/off and
+ * the display floor). Those belong to the person, not to the preset.
+ * Every preset leaves “also hide AI-written posts” off.
  *
  * Balanced is the historical default, so a settings object saved before presets
  * existed lands on Balanced when nothing was customized.
@@ -26,6 +28,8 @@ export interface PresetValues {
   hideMode: HideMode;
   hideUntilChecked: boolean;
   repeatThreshold: number;
+  /** Off on every named preset. Authorship alone does not hide a post. */
+  hideAiWritten: boolean;
 }
 
 export interface Preset {
@@ -54,6 +58,7 @@ export const PRESET_VALUE_KEYS = [
   'hideMode',
   'hideUntilChecked',
   'repeatThreshold',
+  'hideAiWritten',
 ] as const satisfies readonly (keyof PresetValues)[];
 
 const MEDIA_OFF: PresetValues['mediaFilters'] = { images: false, videos: false, gifs: false };
@@ -89,6 +94,7 @@ function cloneValues(values: PresetValues): PresetValues {
     hideMode: values.hideMode,
     hideUntilChecked: values.hideUntilChecked,
     repeatThreshold: values.repeatThreshold,
+    hideAiWritten: values.hideAiWritten,
   };
 }
 
@@ -104,6 +110,7 @@ export function presetValuesOf(settings: Settings): PresetValues {
     hideMode: settings.hideMode,
     hideUntilChecked: settings.hideUntilChecked,
     repeatThreshold: settings.repeatThreshold,
+    hideAiWritten: settings.hideAiWritten,
   });
 }
 
@@ -115,14 +122,14 @@ export const PRESETS: readonly Preset[] = [
   {
     id: 'light',
     name: 'Light',
-    description: 'Hides only obvious AI slop. Rage bait, ads, and promoted posts stay up.',
+    description: 'Hides only obvious filler. Rage bait, ads, promoted posts, and useful AI-written posts stay up.',
     willSee: [
-      'Arguments, news, and product launches',
-      'Ads and promoted posts',
+      'Arguments, news, product launches, and ads',
+      'Useful posts, including ones written with AI',
       'Short replies and posts with a few emoji or links',
     ],
     wontSee: [
-      'Obvious machine-written filler',
+      'Obvious filler, whoever wrote it',
       'Hashtag piles, emoji piles, link dumps, and all-caps shouting',
     ],
     values: {
@@ -146,19 +153,20 @@ export const PRESETS: readonly Preset[] = [
       hideMode: 'collapse',
       hideUntilChecked: false,
       repeatThreshold: 8,
+      hideAiWritten: false,
     },
   },
   {
     id: 'balanced',
     name: 'Balanced',
-    description: 'Hides clear AI slop, rage bait, and ads. A promoted post stays if the writing is useful.',
+    description: 'Hides clear filler, rage bait, and ads. A useful post stays, including one written with AI.',
     willSee: [
       'News, technical posts, and real arguments',
-      'A product launch that says what shipped',
+      'A useful post, even when an AI wrote it',
       'Posts with a few emoji, hashtags, or source links',
     ],
     wontSee: [
-      'Clear AI filler, rage bait, and sales pitches',
+      'Filler, rage bait, and pitches, whoever wrote them',
       'Get-rich, casino, and empty engagement bait',
       'Hashtag piles, emoji piles, link dumps, and shouting',
     ],
@@ -170,11 +178,11 @@ export const PRESETS: readonly Preset[] = [
     description: 'Hides more slop, rage bait, and ads, and flags repeat accounts sooner.',
     willSee: [
       'Posts with specific names, numbers, or a real point',
-      'A substantive launch, even if X marks it promoted',
+      'A useful draft, even when a model wrote it',
       'A sharp criticism that brings evidence',
     ],
     wontSee: [
-      'Borderline slop, quieter rage bait, and softer pitches',
+      'Borderline filler, quieter rage bait, and softer pitches',
       'Bot-style replies that only agree or pivot',
       'Repeat accounts after two slop or ad hides',
     ],
@@ -199,6 +207,7 @@ export const PRESETS: readonly Preset[] = [
       hideMode: 'collapse',
       hideUntilChecked: false,
       repeatThreshold: 2,
+      hideAiWritten: false,
     },
   },
   {
@@ -207,7 +216,7 @@ export const PRESETS: readonly Preset[] = [
     description:
       'Hides borderline slop, engagement bait, promoted posts, and low-value posts. Adds model calls and may delay posts.',
     willSee: [
-      'Specific, useful posts with real detail',
+      'Specific, useful posts, including ones written with AI',
       'A normal reply that actually answers',
     ],
     wontSee: [
@@ -237,6 +246,7 @@ export const PRESETS: readonly Preset[] = [
       hideMode: 'collapse',
       hideUntilChecked: true,
       repeatThreshold: 1,
+      hideAiWritten: false,
     },
   },
 ];
@@ -279,6 +289,7 @@ export function samePresetValues(a: PresetValues, b: PresetValues): boolean {
   if (a.hideMode !== b.hideMode) return false;
   if (a.hideUntilChecked !== b.hideUntilChecked) return false;
   if (a.repeatThreshold !== b.repeatThreshold) return false;
+  if (a.hideAiWritten !== b.hideAiWritten) return false;
   for (const id of MEDIA_IDS) {
     if (a.mediaFilters[id] !== b.mediaFilters[id]) return false;
   }
@@ -323,6 +334,7 @@ export function presetDistance(settings: Settings, id: PresetId): number {
   distance += Math.abs(values.repeatThreshold - target.repeatThreshold) / REPEAT_THRESHOLD_MAX;
   if (values.hidePromoted !== target.hidePromoted) distance += booleanPenalty;
   if (values.hideUntilChecked !== target.hideUntilChecked) distance += booleanPenalty;
+  if (values.hideAiWritten !== target.hideAiWritten) distance += booleanPenalty;
   if (values.hideMode !== target.hideMode) distance += booleanPenalty;
   for (const media of MEDIA_IDS) {
     if (values.mediaFilters[media] !== target.mediaFilters[media]) distance += booleanPenalty;

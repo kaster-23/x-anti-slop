@@ -16,6 +16,8 @@ import { meterGlassTheme, readFeedTheme } from '@/lib/card-style';
 import { paintFeedCard, restyleFeedCards, setCardAppearance } from './cards';
 import { activeDusts, cancelAllDusts, cancelDust, playDust } from './dust';
 import { hideMotion, isOnScreen } from '@/lib/hide-motion';
+import { clearAiWrittenPill, mountAiWrittenPill } from './ai-pill';
+import { watchHideEffect } from './hide-effect';
 import { mountMeter } from './meter';
 import {
   autoHiddenReason,
@@ -56,6 +58,7 @@ export default defineContentScript({
       loadPlacement: loadOverlayPlacement,
       savePlacement: saveOverlayPlacement,
       watchPlacement: (onChange) => overlayStore.watch((value) => onChange(value)),
+      openSettings: () => browser.runtime.sendMessage({ type: 'openOptions' }),
     });
     const session = { checked: 0, hidden: 0, settledLocally: 0, cost: 0 };
     const metered = new Set<string>();
@@ -107,6 +110,7 @@ export default defineContentScript({
         flushTimer = undefined;
       }
       setCardAppearance(settings.cards);
+      meter.setAnimatedBorder(settings.cards.animatedBorder);
       meter.setTheme(meterGlassTheme(readFeedTheme(document)));
       resetAll();
       meter.setVisible(meterVisible());
@@ -446,6 +450,7 @@ export default defineContentScript({
         noteFlaggedHidden(tweet, settings.repeatThreshold, verdict.reason);
       } else {
         unmask(article);
+        mountAiWrittenPill(article, verdict.scores, settings);
         mountLabels(article, tweet, verdict, settings.labeling);
       }
     }
@@ -500,6 +505,13 @@ export default defineContentScript({
       });
     }
 
+    const hideWaits = new Map<HTMLElement, () => void>();
+
+    function stopHideWait(cell: HTMLElement) {
+      hideWaits.get(cell)?.();
+      hideWaits.delete(cell);
+    }
+
     function reducedMotion(): boolean {
       try {
         return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -510,11 +522,13 @@ export default defineContentScript({
 
     /** Strips every trace of a previous verdict from a timeline cell. */
     function clearCell(cell: HTMLElement) {
+      stopHideWait(cell);
       cancelDust(cell);
       cell.classList.remove('ct-pending', 'ct-collapsed', 'ct-blurred', 'ct-removed');
       cell.querySelector('.ct-placeholder')?.remove();
       cell.querySelector('.ct-suggest')?.remove();
       cell.querySelector('.ct-labelbar')?.remove();
+      clearAiWrittenPill(articleFromCell(cell));
     }
 
     function unmaskById(id: string) {
@@ -523,6 +537,7 @@ export default defineContentScript({
 
     function hide(article: HTMLElement, tweet: TweetInput, verdict: Verdict, allowAnimation = false) {
       const id = tweet.id;
+      clearAiWrittenPill(article);
       article.dataset.ctState = 'hidden';
       const cell = cellOf(article);
       cell.classList.remove('ct-pending');
@@ -558,6 +573,7 @@ export default defineContentScript({
       show.addEventListener('click', (event) => {
         event.stopPropagation();
         event.preventDefault();
+        stopHideWait(cell);
         cancelDust(cell);
         revealed.add(id);
         cell.classList.remove('ct-collapsed', 'ct-blurred', 'ct-removed');
@@ -596,24 +612,38 @@ export default defineContentScript({
         chrome.colorCoding && chrome.accent
           ? chrome.accent
           : getComputedStyle(article).color || '#e7e9ea';
-      playDust({
-        article,
-        cell,
-        particles: motion.particles,
-        collapse: settings.hideMode === 'collapse',
-        color: ink,
-        onDone: commit,
+      stopHideWait(cell);
+      const stop = watchHideEffect(article, {
+        reducedMotion,
+        onPlay: () => {
+          hideWaits.delete(cell);
+          playDust({
+            article,
+            cell,
+            particles: motion.particles,
+            collapse: settings.hideMode === 'collapse',
+            color: ink,
+            onDone: commit,
+          });
+        },
+        onInstant: () => {
+          hideWaits.delete(cell);
+          commit();
+        },
       });
+      hideWaits.set(cell, stop);
     }
 
     function resetAll() {
+      for (const stop of hideWaits.values()) stop();
+      hideWaits.clear();
       cancelAllDusts();
       for (const cell of document.querySelectorAll<HTMLElement>(
         '.ct-pending, .ct-collapsed, .ct-blurred, .ct-removed',
       )) {
         clearCell(cell);
       }
-      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest, .ct-labelbar')) {
+      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest, .ct-labelbar, .ct-ai-pill')) {
         node.remove();
       }
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
@@ -675,17 +705,31 @@ function mountLabels(article: HTMLElement, tweet: TweetInput, verdict: Verdict, 
   const cell = article.closest<HTMLElement>('[data-testid="cellInnerDiv"]') ?? article;
   cell.querySelector('.ct-labelbar')?.remove();
   cell.querySelector('.ct-placeholder .ct-labels')?.remove();
-  if (!enabled || !verdict.features) return;
+  if (!enabled) return;
 
   const bar = document.createElement('span');
   bar.className = 'ct-labels';
+  bar.title = 'Teaches the AI-written detector. Marking a post does not hide it.';
   const prompt = document.createElement('span');
   prompt.className = 'ct-label-prompt';
-  prompt.textContent = 'Mark';
+  prompt.textContent = 'Written by:';
+  const saved = document.createElement('span');
+  saved.className = 'ct-label-saved';
+  saved.hidden = true;
   bar.append(prompt);
+  let flashTimer = 0;
+  const flash = (text: string) => {
+    saved.hidden = false;
+    saved.textContent = text;
+    const view = article.ownerDocument.defaultView;
+    view?.clearTimeout(flashTimer);
+    flashTimer = view?.setTimeout(() => {
+      saved.hidden = true;
+    }, 1200) ?? 0;
+  };
   for (const [label, text] of [
     [1, 'AI'],
-    [0, 'Human'],
+    [0, 'Person'],
   ] as const) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -695,26 +739,32 @@ function mountLabels(article: HTMLElement, tweet: TweetInput, verdict: Verdict, 
     button.addEventListener('click', (event) => {
       event.stopPropagation();
       event.preventDefault();
-      labeled.set(tweet.id, label);
+      const current = labeled.get(tweet.id);
+      const clearing = current === label;
+      if (clearing) labeled.delete(tweet.id);
+      else labeled.set(tweet.id, label);
       for (const sibling of bar.querySelectorAll<HTMLButtonElement>('.ct-label')) {
-        sibling.setAttribute('aria-pressed', String(sibling === button));
+        sibling.setAttribute('aria-pressed', String(!clearing && sibling === button));
       }
       void runContentTask(
         runtimeAlive(() => browser.runtime),
         () =>
-          browser.runtime.sendMessage({
-            type: 'labelPost',
-            id: tweet.id,
-            label,
-            features: verdict.features,
-            text: tweet.text,
-            author: tweet.author,
-          }),
+          clearing
+            ? browser.runtime.sendMessage({ type: 'clearPostLabel', id: tweet.id })
+            : browser.runtime.sendMessage({
+                type: 'labelPost',
+                id: tweet.id,
+                label,
+                features: verdict.features ?? {},
+                text: tweet.text,
+                author: tweet.author,
+              }),
         'could not save label',
-      );
+      ).then(() => flash(clearing ? 'Cleared' : 'Saved'));
     });
     bar.append(button);
   }
+  bar.append(saved);
 
   const placeholder = cell.querySelector('.ct-placeholder');
   if (placeholder) {
@@ -771,8 +821,14 @@ function needsModel(s: Settings): boolean {
   return (
     Object.values(s.signals).some((c) => c.enabled) ||
     s.minQuality > 0 ||
-    activeCustomFilters(s).length > 0
+    activeCustomFilters(s).length > 0 ||
+    s.aiWritten.show ||
+    s.hideAiWritten
   );
+}
+
+function articleFromCell(cell: HTMLElement): HTMLElement {
+  return cell.matches?.(TWEET_SELECTOR) ? cell : (cell.querySelector(TWEET_SELECTOR) ?? cell);
 }
 
 function mutationMatters(mutations: MutationRecord[]): boolean {

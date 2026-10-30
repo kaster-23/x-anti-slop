@@ -3,6 +3,7 @@
  * Saves from before a field existed pick up the default for that field.
  * The storage item stays `local:settings`; nothing here renames a key.
  */
+import { normalizeAiWritten } from './ai-written';
 import { normalizeCardAppearance, type CardAppearance, type CardTagId } from './card-style';
 import { DEFAULT_SETTINGS, clampThreshold } from './defaults';
 import { SLOP_CATEGORIES, resolveWeights } from './detect/score';
@@ -53,6 +54,9 @@ export function coerceSettings(stored: StoredSettings | null | undefined): Setti
       : DEFAULT_SETTINGS.customFilters,
     slopCategories: { ...DEFAULT_SETTINGS.slopCategories },
     slopWeights: source.slopWeights ? resolveWeights(source.slopWeights) : null,
+    aiWritten: normalizeAiWritten(source.aiWritten),
+    hideAiWritten: source.hideAiWritten === true,
+    labeling: typeof source.labeling === 'boolean' ? source.labeling : false,
     hideMode: isHideMode(source.hideMode) ? source.hideMode : DEFAULT_SETTINGS.hideMode,
     cards: normalizeCardAppearance(source.cards),
     replyBotThreshold: clampThreshold(

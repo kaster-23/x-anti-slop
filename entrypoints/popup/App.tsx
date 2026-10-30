@@ -4,6 +4,9 @@ import { InfoTip } from '@/components/InfoTip';
 import { ENABLED_HELP, MEDIA_HELP, PROMOTED_HELP, QUALITY_HELP, SIGNAL_HELP } from '@/components/help';
 import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/LabeledSlider';
 import { PresetPicker } from '@/components/PresetPicker';
+import { AutosaveStatus } from '@/components/AutosaveStatus';
+import { useAutosave } from '@/components/use-autosave';
+import { shouldDebounceSave } from '@/lib/autosave';
 import { saveSettings } from '@/lib/settings';
 import { blankKeys, isUsable, THRESHOLD_MAX, THRESHOLD_MIN } from '@/lib/defaults';
 import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
@@ -22,6 +25,9 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [apiError, setApiError] = useState<{ message: string } | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
+  const autosave = useAutosave(async (patch) => {
+    setSettings(blankKeys(await saveSettings(patch)));
+  });
 
   useEffect(() => {
     browser.runtime
@@ -47,7 +53,7 @@ export default function App() {
     if (kind === 'edit') setUndo(null);
     const nextPatch = kind === 'undo' ? patch : presetChangePatch(settings, patch);
     setSettings((prev) => (prev ? { ...prev, ...nextPatch } : prev));
-    setSettings(blankKeys(await saveSettings(nextPatch)));
+    autosave.submit(nextPatch, kind === 'edit' && shouldDebounceSave(nextPatch));
   }
 
   function choosePreset(id: PresetId) {
@@ -97,7 +103,14 @@ export default function App() {
           example={ENABLED_HELP.example}
           align="end"
         />
-        <label className="switch">
+        <div className="mast-side">
+          <AutosaveStatus
+            phase={autosave.phase}
+            showHint={autosave.showHint}
+            hint={autosave.hint}
+            onRetry={autosave.retry}
+          />
+          <label className="switch">
           <input
             type="checkbox"
             checked={settings.enabled}
@@ -106,6 +119,7 @@ export default function App() {
           />
           <span />
         </label>
+        </div>
       </header>
 
       {apiError && (
@@ -114,7 +128,7 @@ export default function App() {
             <span className="grow">
               {apiError.message}{' '}
               {apiError.message.startsWith('Check your key') && (
-                  <a href="#" onClick={(event) => openOptions(event, 'account')}>
+                  <a href="#" onClick={openOptions}>
                     Open settings
                   </a>
                 )}
@@ -137,7 +151,7 @@ export default function App() {
       {!hasKey && (
         <div className="notice">
           No API key. Model filters are off.{' '}
-          <a href="#" onClick={(event) => openOptions(event, 'account')}>
+          <a href="#" onClick={openOptions}>
             Add a {PROVIDERS[settings.provider].name} key
           </a>
           .
@@ -240,7 +254,7 @@ export default function App() {
             onChange={(minQuality) => update({ minQuality })}
           />
           {settings.minQuality > 0 && (
-            <p className="hint mt-6">
+            <p className="hint stack-2">
               Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
             </p>
           )}
@@ -270,7 +284,7 @@ export default function App() {
               />
             );
           })}
-          <p className="hint mt-8">
+          <p className="hint stack-2">
             <a href="#" onClick={openOptions}>
               All settings
             </a>
@@ -288,21 +302,7 @@ export default function App() {
   );
 }
 
-function openOptions(event: React.MouseEvent, hash: 'filtering' | 'account' = 'filtering') {
+function openOptions(event: React.MouseEvent) {
   event.preventDefault();
-  const base = browser.runtime.getURL('/options.html');
-  const url = `${base}#${hash}`;
-  void browser.tabs
-    .query({})
-    .then(async (tabs) => {
-      const open = tabs.find((tab) => tab.url?.startsWith(base));
-      if (open?.id != null) {
-        await browser.tabs.update(open.id, { active: true, url });
-        return;
-      }
-      await browser.tabs.create({ url });
-    })
-    .catch(() => {
-      void browser.runtime.openOptionsPage();
-    });
+  void browser.runtime.sendMessage({ type: 'openOptions' }).catch(() => {});
 }

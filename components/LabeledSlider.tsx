@@ -68,14 +68,17 @@ export function LabeledSlider({
               checked={checked === true}
               onChange={(event) => onChecked(event.target.checked)}
             />
-            <span>{label}</span>
+            <span className="title-mark">
+              <span>{label}</span>
+              <InfoTip label={label} explanation={explanation} example={example} tipKey={tipKey} />
+            </span>
           </label>
         ) : (
-          <label className="grow slider-label" htmlFor={id}>
-            {label}
+          <label className="grow slider-label title-mark" htmlFor={id}>
+            <span>{label}</span>
+            <InfoTip label={label} explanation={explanation} example={example} tipKey={tipKey} />
           </label>
         )}
-        <InfoTip label={label} explanation={explanation} example={example} tipKey={tipKey} align="end" />
         <span className="slider-value">{display}</span>
       </div>
       <div className="slider-line">
@@ -170,9 +173,11 @@ export function ToggleRow({
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
         />
-        <span>{label}</span>
+        <span className="title-mark">
+          <span>{label}</span>
+          <InfoTip label={label} explanation={explanation} example={example} tipKey={tipKey} />
+        </span>
       </label>
-      <InfoTip label={label} explanation={explanation} example={example} tipKey={tipKey} align="end" />
     </div>
   );
 }

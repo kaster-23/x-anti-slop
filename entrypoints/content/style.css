@@ -122,6 +122,26 @@
   color: var(--ct-chip-ink, var(--ct-card-text));
 }
 
+.ct-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  flex: none;
+  margin-left: 6px;
+  padding: 0 6px;
+  height: 16px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .ct-reason {
   flex: 1;
   min-width: 0;
@@ -197,15 +217,19 @@
 .ct-labels {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   margin-left: auto;
+  opacity: 0.55;
 }
 
 .ct-label-prompt {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  opacity: 0.7;
+}
+
+.ct-label-saved {
+  font-size: 11px;
 }
 
 .ct-labelbar {
@@ -307,7 +331,15 @@
   display: none;
 }
 
-.ct-meter .ct-meter-toggle {
+.ct-meter-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.ct-meter .ct-meter-toggle,
+.ct-meter .ct-meter-gear {
   display: inline-flex;
   flex: none;
   align-items: center;
@@ -324,7 +356,8 @@
   cursor: pointer;
 }
 
-.ct-meter .ct-meter-toggle:focus-visible {
+.ct-meter .ct-meter-toggle:focus-visible,
+.ct-meter .ct-meter-gear:focus-visible {
   outline: 1px solid currentColor;
   outline-offset: 2px;
 }
@@ -347,6 +380,60 @@
 
 .ct-meter-row[hidden] {
   display: none;
+}
+
+@property --ct-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes ct-border-turn {
+  to {
+    --ct-angle: 360deg;
+  }
+}
+
+/* The only gradient in the extension: a 1.25px silver line, cool blue, not a rainbow. */
+.ct-meter[data-ct-border="on"] {
+  border-color: transparent;
+}
+
+.ct-meter[data-ct-border="on"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 1.25px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--ct-angle),
+    #d5dbe2,
+    #c5d2e0 32%,
+    #eef2f6 58%,
+    #b7c5d4 82%,
+    #d5dbe2
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: ct-border-turn 7s linear infinite;
+  pointer-events: none;
+}
+
+.ct-meter.is-border-paused[data-ct-border="on"]::before {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-meter[data-ct-border="on"]::before {
+    animation-play-state: paused;
+  }
 }
 
 .ct-meter-row b {

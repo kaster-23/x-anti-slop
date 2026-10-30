@@ -58,7 +58,7 @@ export default function CustomFilters({
         />
       ))}
 
-      <div className="row wrap mt-14">
+      <div className="row wrap stack-4">
         <button type="button" onClick={add} disabled={filters.length >= MAX_CUSTOM_FILTERS}>
           Add a filter
         </button>

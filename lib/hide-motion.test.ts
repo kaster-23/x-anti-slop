@@ -78,6 +78,7 @@ describe('hide animation', () => {
     expect(normalizeHideAnimation('snap')).toBe('particles');
     expect(coerceSettings({}).cards.hideAnimation).toBe('particles');
     expect(coerceSettings({ cards: { hideAnimation: 'off' } }).cards.hideAnimation).toBe('off');
+    expect(coerceSettings({}).cards.animatedBorder).toBe(true);
     expect(coerceSettings({ cards: { hideAnimation: 'blur' } }).cards.colorCoding).toBe(
       DEFAULT_CARD_APPEARANCE.colorCoding,
     );
