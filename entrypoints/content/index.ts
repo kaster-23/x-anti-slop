@@ -109,6 +109,7 @@ export default defineContentScript({
         flushTimer = undefined;
       }
       setCardAppearance(settings.cards);
+      meter.setAnimatedBorder(settings.cards.animatedBorder);
       meter.setTheme(meterGlassTheme(readFeedTheme(document)));
       resetAll();
       meter.setVisible(meterVisible());

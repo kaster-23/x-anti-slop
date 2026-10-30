@@ -369,6 +369,60 @@
   display: none;
 }
 
+@property --ct-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes ct-border-turn {
+  to {
+    --ct-angle: 360deg;
+  }
+}
+
+/* The only gradient in the extension: a 1.25px silver line, cool blue, not a rainbow. */
+.ct-meter[data-ct-border="on"] {
+  border-color: transparent;
+}
+
+.ct-meter[data-ct-border="on"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: 1.25px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--ct-angle),
+    #d5dbe2,
+    #c5d2e0 32%,
+    #eef2f6 58%,
+    #b7c5d4 82%,
+    #d5dbe2
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: ct-border-turn 7s linear infinite;
+  pointer-events: none;
+}
+
+.ct-meter.is-border-paused[data-ct-border="on"]::before {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-meter[data-ct-border="on"]::before {
+    animation-play-state: paused;
+  }
+}
+
 .ct-meter-row b {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 400;

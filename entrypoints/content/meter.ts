@@ -26,6 +26,8 @@ export interface Meter {
   update(counts: MeterCounts): void;
   setVisible(visible: boolean): void;
   setTheme(theme: 'light' | 'dark'): void;
+  /** Silver line around the panel. Off keeps the still border. */
+  setAnimatedBorder(on: boolean): void;
   remove(): void;
 }
 
@@ -257,6 +259,17 @@ export function mountMeter(doc: Document, hooks: MeterHooks): Meter {
 
   render();
 
+  let borderOn = true;
+  const motionQuery = view?.matchMedia('(prefers-reduced-motion: reduce)');
+  const syncBorder = () => {
+    root.dataset.ctBorder = borderOn ? 'on' : 'off';
+    const paused = doc.hidden || motionQuery?.matches === true;
+    root.classList.toggle('is-border-paused', borderOn && paused);
+  };
+  doc.addEventListener('visibilitychange', syncBorder);
+  motionQuery?.addEventListener?.('change', syncBorder);
+  syncBorder();
+
   if (view) {
     view.addEventListener('resize', onResize);
     view.visualViewport?.addEventListener('resize', onResize);
@@ -313,7 +326,13 @@ export function mountMeter(doc: Document, hooks: MeterHooks): Meter {
     setTheme(theme) {
       root.dataset.ctTheme = theme;
     },
+    setAnimatedBorder(on) {
+      borderOn = on;
+      syncBorder();
+    },
     remove() {
+      doc.removeEventListener('visibilitychange', syncBorder);
+      motionQuery?.removeEventListener?.('change', syncBorder);
       view?.removeEventListener('resize', onResize);
       view?.visualViewport?.removeEventListener('resize', onResize);
       view?.removeEventListener('pointermove', onPointerMove);

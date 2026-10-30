@@ -311,4 +311,24 @@ describe('timeline overlay', () => {
     expect(root.classList.contains('is-collapsed')).toBe(false);
     meter.remove();
   });
+
+  test('the animated border stays on the collapsed pill and pauses when the tab is hidden', async () => {
+    const win = desktop();
+    const meter = mountMeter(win.document as unknown as Document, hooks());
+    await flush();
+    const root = node(win, '.ct-meter');
+    expect(root.getAttribute('data-ct-border')).toBe('on');
+    node(win, 'button.ct-meter-toggle').click();
+    expect(root.classList.contains('is-collapsed')).toBe(true);
+    expect(root.getAttribute('data-ct-border')).toBe('on');
+    meter.setAnimatedBorder(false);
+    expect(root.getAttribute('data-ct-border')).toBe('off');
+    expect(root.classList.contains('is-border-paused')).toBe(false);
+    meter.setAnimatedBorder(true);
+    Object.defineProperty(win.document, 'hidden', { configurable: true, get: () => true });
+    win.document.dispatchEvent(new win.Event('visibilitychange'));
+    expect(root.getAttribute('data-ct-border')).toBe('on');
+    expect(root.classList.contains('is-border-paused')).toBe(true);
+    meter.remove();
+  });
 });

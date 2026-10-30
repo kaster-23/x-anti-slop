@@ -45,6 +45,8 @@ export interface CardAppearance {
   textSize: CardTextSize;
   /** Particles and blur when a verdict hides a post that is already on screen. */
   hideAnimation: HideAnimation;
+  /** Slow silver line around the timeline counts. On by default. */
+  animatedBorder: boolean;
   colors: Record<CardTagId, string>;
 }
 
@@ -100,6 +102,7 @@ export const DEFAULT_CARD_APPEARANCE: CardAppearance = {
   style: 'solid',
   textSize: 'medium',
   hideAnimation: 'particles',
+  animatedBorder: true,
   colors: { ...DEFAULT_TAG_COLORS },
 };
 
@@ -206,6 +209,7 @@ export function normalizeCardAppearance(raw: unknown): CardAppearance {
         ? source.textSize
         : DEFAULT_CARD_APPEARANCE.textSize,
     hideAnimation: normalizeHideAnimation(source.hideAnimation),
+    animatedBorder: typeof source.animatedBorder === 'boolean' ? source.animatedBorder : DEFAULT_CARD_APPEARANCE.animatedBorder,
     colors: next,
   };
 }

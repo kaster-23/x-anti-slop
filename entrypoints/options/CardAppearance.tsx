@@ -82,6 +82,15 @@ export default function CardAppearance({
       <p className="hint mt-8">
         Particles and blur are separate. Either plays only for a post already on screen. Reduced motion hides it at once.
       </p>
+      <ToggleRow
+        id="animated-border"
+        label="Animated border"
+        checked={cards.animatedBorder}
+        onChange={(animatedBorder) => onChange({ ...cards, animatedBorder })}
+        explanation="A thin silver line turns slowly around the timeline counts, including the collapsed pill. It pauses when the tab is hidden and when motion is reduced."
+        example="Off leaves the same panel with a still border."
+        tipKey="animated-border"
+      />
       <div className="field-label mt-14">
         <span id="card-text-size-label">Text size</span>
       </div>
