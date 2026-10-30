@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Timeline preview</title>
+    <link rel="stylesheet" href="/content-scripts/content.css">
+    <style>
+      body { margin: 0; background: #000; color: #fff; font: 15px/1.4 system-ui, sans-serif; }
+      article { max-width: 600px; padding: 16px 16px 24px; }
+      [data-testid="User-Name"] { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+      .handle { color: #888; font-weight: 400; }
+      p { margin: 8px 0 0; }
+    </style>
+  </head>
+  <body>
+    <article>
+      <div data-testid="User-Name">
+        <span>Ada</span>
+        <span class="handle">@ada</span>
+        <span class="ct-ai-pill" title="Estimated chance this post was written with AI. Shown, not hidden, because it adds value.">AI 72%</span>
+      </div>
+      <p>Rotated session tokens every 12 hours and bound them to the device id. p95 auth fell from 800ms to 220ms.</p>
+    </article>
+    <div class="ct-meter" data-ct-border="on" data-ct-theme="dark" role="status" style="left: 16px; bottom: 16px; top: auto;">
+      <div class="ct-meter-header">
+        <div class="ct-meter-brand"><span class="ct-meter-title">X-AntiSlop</span></div>
+        <span class="ct-meter-actions">
+          <button type="button" class="ct-meter-gear" aria-label="Settings">⚙</button>
+          <button type="button" class="ct-meter-toggle" aria-label="Collapse timeline counts">−</button>
+        </span>
+      </div>
+      <div class="ct-meter-body">
+        <div class="ct-meter-row"><span>Checked</span><b>12</b></div>
+        <div class="ct-meter-row"><span>Hidden</span><b>4</b></div>
+        <div class="ct-meter-row"><span>Settled locally</span><b>3</b></div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -316,7 +316,7 @@ export default function App() {
           })}
         </div>
 
-        <div className="mt-18">
+        <div className="stack-5">
           <LabeledSlider
             id="repeat-threshold"
             label={REPEAT_HELP.label}
@@ -337,7 +337,7 @@ export default function App() {
 
         <h3 className="group-label">Writing-style buckets</h3>
         <p className="hint">A bucket hides a post when its strongest tell clears this bar.</p>
-        <div className="mt-12">
+        <div className="stack-3">
           <SlopBuckets settings={settings} onChange={update} />
         </div>
 
@@ -348,7 +348,7 @@ export default function App() {
           </summary>
           <div className="advanced-body">
             <SlopAdvanced settings={settings} onChange={update} />
-            <div className="mt-16">
+            <div className="stack-4">
               <LabeledSlider
                 id="quality"
                 label={QUALITY_HELP.label}
@@ -367,12 +367,12 @@ export default function App() {
                 onChange={(minQuality) => update({ minQuality })}
               />
               {settings.minQuality > 0 && (
-                <p className="hint mt-6">
+                <p className="hint stack-2">
                   Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
                 </p>
               )}
             </div>
-            <div className="mt-16">
+            <div className="stack-4">
               <ToggleRow
                 id="hide-until"
                 label={HIDE_UNTIL_HELP.label}
@@ -383,7 +383,7 @@ export default function App() {
                 onChange={(hideUntilChecked) => update({ hideUntilChecked })}
               />
             </div>
-            <div className="mt-18">
+            <div className="stack-5">
               <CustomFilters
                 filters={settings.customFilters}
                 onChange={(customFilters) => update({ customFilters })}
@@ -421,7 +421,7 @@ export default function App() {
           onChange={(e) => setAllowlistText(e.target.value)}
           onBlur={() => update({ allowlist: parseHandleList(allowlistText) })}
         />
-        <p className="hint mt-6">One handle per line. These accounts skip every filter.</p>
+        <p className="hint stack-2">One handle per line. These accounts skip every filter.</p>
 
         <h3>
           <span className="field-label">
@@ -437,13 +437,13 @@ export default function App() {
           onChange={(e) => setBlocklistText(e.target.value)}
           onBlur={() => update({ blocklist: parseHandleList(blocklistText) })}
         />
-        <p className="hint mt-6">
+        <p className="hint stack-2">
           One handle per line. These accounts are hidden, and the post is not sent to the model.
           Posts under five words stay visible without a model call. Hashtag piles, emoji piles,
           link dumps, and all-caps shouting are hidden on this device.
         </p>
 
-        <div className="mt-18">
+        <div className="stack-5">
           <RepeatAccounts threshold={settings.repeatThreshold} />
         </div>
       </section>
@@ -482,7 +482,7 @@ export default function App() {
               </button>
             ))}
           </div>
-          <p className="hint mt-8">
+          <p className="hint stack-2">
             {HIDE_MODES.find((mode) => mode.id === settings.hideMode)?.hint}
           </p>
         </div>
@@ -499,7 +499,7 @@ export default function App() {
           >
             Reset overlay position
           </button>
-          <p id="overlay-position-hint" className="hint mt-6">
+          <p id="overlay-position-hint" className="hint stack-2">
             Puts the on-feed counts back at the bottom left, clear of X's buttons. Double-click the
             overlay header to do the same.
           </p>
@@ -567,7 +567,7 @@ export default function App() {
               {test.status === 'testing' ? 'Testing…' : 'Test'}
             </button>
           </div>
-          <p className="hint mt-6">
+          <p className="hint stack-2">
             {test.status === 'ok' && <span>{test.message}</span>}
             {test.status === 'error' && <span className="status-err">{test.message}</span>}
             {test.status !== 'ok' && test.status !== 'error' && (
@@ -599,7 +599,7 @@ export default function App() {
             value={settings.model}
             onChange={(e) => update({ model: e.target.value })}
           />
-          <p className="hint mt-6">Blank uses the default.</p>
+          <p className="hint stack-2">Blank uses the default.</p>
         </div>
       </section>
 
@@ -628,14 +628,14 @@ export default function App() {
             </div>
           </div>
           {Object.keys(stats.bySignal).length > 0 && (
-            <p className="hint mt-10">
+            <p className="hint stack-3">
               {Object.entries(stats.bySignal)
                 .sort((a, b) => b[1] - a[1])
                 .map(([label, n]) => `${label}: ${n}`)
                 .join(' · ')}
             </p>
           )}
-          <div className="row wrap mt-14">
+          <div className="row wrap stack-4">
             <button
               type="button"
               onClick={async () => {

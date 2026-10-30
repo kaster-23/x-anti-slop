@@ -254,7 +254,7 @@ export default function App() {
             onChange={(minQuality) => update({ minQuality })}
           />
           {settings.minQuality > 0 && (
-            <p className="hint mt-6">
+            <p className="hint stack-2">
               Hides anything under “{QUALITY_LEVELS[Math.ceil(settings.minQuality)]}”.
             </p>
           )}
@@ -284,7 +284,7 @@ export default function App() {
               />
             );
           })}
-          <p className="hint mt-8">
+          <p className="hint stack-2">
             <a href="#" onClick={openOptions}>
               All settings
             </a>

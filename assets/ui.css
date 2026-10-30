@@ -11,6 +11,15 @@
   --fill-muted: #555;
   --danger: #ff4d4d;
   --radius: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --control-height: 36px;
 }
 
 @media (prefers-color-scheme: light) {
@@ -25,6 +34,7 @@
     --fill-text: #fff;
     --fill-muted: #aaa;
     --danger: #c40000;
+    --control-height: 36px;
   }
 }
 
@@ -143,14 +153,31 @@ a:hover {
   border: 0;
 }
 
-.mt-6 { margin-top: 6px; }
-.mt-8 { margin-top: 8px; }
-.mt-10 { margin-top: 10px; }
-.mt-12 { margin-top: 12px; }
-.mt-14 { margin-top: 14px; }
-.mt-16 { margin-top: 16px; }
-.mt-18 { margin-top: 18px; }
-.pad { padding: 16px; }
+.stack-2 { margin-top: var(--space-2); }
+.stack-3 { margin-top: var(--space-3); }
+.stack-4 { margin-top: var(--space-4); }
+.stack-5 { margin-top: var(--space-5); }
+.pad { padding: var(--space-4); }
+
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.inline-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 
 button,
 input,
@@ -161,12 +188,19 @@ summary {
 }
 
 button {
+  min-height: var(--control-height);
   padding: 8px 12px;
   font-weight: 400;
   background: transparent;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   cursor: pointer;
+}
+
+button.tip-btn,
+button.text-btn,
+button.preset-row {
+  min-height: 0;
 }
 
 button:hover:not(:disabled) {
@@ -224,6 +258,7 @@ input[type="password"],
 input[type="number"],
 textarea {
   width: 100%;
+  min-height: var(--control-height);
   padding: 8px 10px;
   color: var(--text);
   background: transparent;

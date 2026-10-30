@@ -134,11 +134,11 @@ export function SlopAdvanced({
           checked={settings.labeling}
           onChange={(labeling) => onChange({ labeling })}
         />
-        <p className="hint mt-8">
+        <p className="hint stack-2">
           {ai} AI · {human} human
           {settings.slopWeights ? ' · weights fitted from your marks' : ' · starting weights'}
         </p>
-        <div className="row wrap mt-10">
+        <div className="row wrap stack-3">
           <button type="button" onClick={fit} disabled={busy}>
             {busy ? 'Fitting…' : 'Fit weights'}
           </button>
@@ -164,7 +164,7 @@ export function SlopAdvanced({
             Clear labels
           </button>
         </div>
-        {message && <p className="hint mt-8">{message}</p>}
+        {message && <p className="hint stack-2">{message}</p>}
       </div>
     </>
   );
