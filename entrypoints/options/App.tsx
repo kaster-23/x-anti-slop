@@ -161,7 +161,10 @@ export default function App() {
       <header className="mast">
         <div>
           <h1>X-AntiSlop</h1>
-          <p className="lede">Hides slop, rage bait, and ads on X.</p>
+          <p className="lede">
+            Filters AI slop, engagement bait, rage bait and pitchy ads from your X work feed. Flags
+            AI-written posts that still add value.
+          </p>
         </div>
         <div className="mast-side">
           <AutosaveStatus
@@ -187,7 +190,7 @@ export default function App() {
       >
       {!hasKey && (
         <p className="hint tab-note">
-          No API key. Model filters are off.{' '}
+          No key stored. Model scores stay off. On-device counts still run.{' '}
           <button type="button" className="text-btn" onClick={() => selectTab('account')}>
             Add a key
           </button>
@@ -519,7 +522,18 @@ export default function App() {
         <div className="panel-head">
           <h2 id="provider-heading">Provider and API key</h2>
         </div>
-        <div className="field">
+        <p className="hint">
+          Who it&apos;s for: developers, engineers, AI builders, researchers, and people who use X as a
+          work feed.
+        </p>
+        {!hasKey && (
+          <p className="hint stack-2">
+            First run. Paste a TypeSafe or OpenRouter key and press Test. The background worker sends
+            post text to that provider. Model scores stay off until a key is stored. On-device counts
+            still hide hashtag piles, emoji piles, link dumps, and shouting.
+          </p>
+        )}
+        <div className="field stack-4">
           <div className="field-label">
             <span id="provider-label">{PROVIDER_HELP.label}</span>
             <InfoTip

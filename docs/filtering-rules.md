@@ -11,6 +11,16 @@ A post is judged in order:
 
 Promoted is not a kind of writing. It is a label the site puts on a paid placement. Light, Balanced, and Strict read the words. Zen hides every promoted post, paid or not, because that preset is maximum calm.
 
+## Work feed
+
+The presets are written for people who use X as a work feed: developers, engineers, AI builders, researchers, and people at technical startups.
+
+You will see: release notes, papers, benchmarks with numbers, postmortems, real launches, technical threads, and useful AI-written posts with the pill.
+
+You won't see: AI-will-replace-you bait, 10-tips threads, comment-for-the-prompt farming, giveaway and crypto shilling, and ratio-bait dunks.
+
+Light only takes the obvious cases. Balanced takes the clear ones. Strict takes quieter bait and reply-guy agreement, and flags a repeat account after two slop or ad hides. Zen also hides every promoted post, low-value filler, and new posts until a verdict arrives. A useful AI-written post stays up on every preset, with the pill, unless you turn on “Also hide AI-written posts.”
+
 ## How to read a bar
 
 Every score runs from 0 to 1. The bar is the minimum score that hides. A higher bar hides fewer posts. A lower bar hides more. Turning a signal off hides none of that kind, whatever the score. These directions never reverse.
@@ -34,41 +44,41 @@ The label is a small monochrome pill, “AI 72%”, near the post header. Its to
 
 A post that adds no value, whoever wrote it: tidy lessons, announced insights, chatbot leftovers, and threads that could be pasted under any topic. Being written with AI is a separate score and does not, by itself, make a post slop.
 
-Hide: "Let's unpack this. The real lesson is the mindset. Agree?"
+Hide: "AI will replace you. Here are 10 tips. Comment PROMPT and I will send the thread."
 
 Keep: "The bug was a stale closure. p95 fell from 800ms to 220ms."
 
-Edge: a numbered list is not slop when the items are specific. A smooth paragraph with no names, numbers, or events is slop even if the tone is calm. Light only hides this when the score is very high (0.9). Balanced uses 0.7. Strict uses 0.6. Zen uses 0.5.
+Edge: a numbered list is not slop when the items are a changelog or a benchmark. A smooth paragraph with no bug, number, paper, or diff is slop even if the tone is calm. A useful AI-written post stays up, with the pill. Light only hides this when the score is very high (0.9). Balanced uses 0.7. Strict uses 0.6. Zen uses 0.5.
 
 ## Rage bait
 
 Written to farm angry replies: insults, side-picking, and dares. A real argument with evidence is not rage bait.
 
-Hide: "If you disagree you cannot read, and I am done being polite."
+Hide: "Ratio this paper into the ground. No result, no page number. If you cite it you cannot read."
 
-Keep: "The fare would go from 64 to 81, and the night bus is the only way home."
+Keep: "Table 3 is the one that matters. F1 moved from 0.71 to 0.78 when the negatives included hard near-duplicates."
 
-Edge: anger plus a date, a quote, or a number stays. Anger plus "share before they delete it" goes. Light leaves rage bait up. The other presets hide clear cases.
+Edge: anger plus a benchmark, a quote, or a diff stays. A ratio-bait dunk with none of those goes. Light leaves rage bait up. The other presets hide clear cases.
 
 ## Engagement bait
 
 The only point is a click, a comment word, or a follow. The model often files this as an ad. When AI slop is on, that ad score is also compared with the slop bar, so very obvious bait can hide even if the ads switch is off.
 
-Hide: "Comment FOCUS and I will send the checklist. The algorithm is watching."
+Hide: "Comment PROMPT and I will send the agent stack. The algorithm is watching."
 
 Keep: "Which document should I read first, the spec or the rollback plan?"
 
-Edge: a genuine question with a specific stake stays. "Drop a yes" with nothing else goes. Light hides it only at 0.9. Balanced hides it from 0.6 once ads are on, and from 0.7 through the slop bar.
+Edge: a genuine question about a diff or a paper stays. "Comment PROMPT" with nothing else goes. Light hides it only at 0.9. Balanced hides it from 0.6 once ads are on, and from 0.7 through the slop bar.
 
 ## Ads
 
 A pitch: affiliate codes, dropshipping, casino, crypto signals, vague get-rich offers. Naming a product is not an ad.
 
-Hide: "Use code SLOP20. Link in bio. Limited."
+Hide: "Giveaway rules: follow, repost, and tag two friends. Winner gets the alpha prompt list. The token launches at 4."
 
 Keep: "Version 2.3 adds offline drafts. We removed the forced tutorial."
 
-Edge: a price and a spec sheet is a launch, not a pitch. "NFA, we are all going to make it" is a pitch. Light leaves ordinary ads up. Balanced hides them at 0.6, Strict at 0.55, Zen at 0.5.
+Edge: a release with a version and a metric is a launch, not a pitch. A detail-free "this changes everything" launch is a pitch. "NFA, we are all going to make it" is a pitch. Light leaves ordinary ads up unless the score also clears the slop bar (0.9). Balanced hides them at 0.6, Strict at 0.55, Zen at 0.5.
 
 ## Promoted
 
@@ -86,7 +96,7 @@ How much a careful reader learns, from 0 to 3. 0 is noise, 3 is a post you could
 
 Hide: "Wow. Just wow. Honestly. Yeah." when the floor is above that post's score.
 
-Keep: a short recipe or a three-line incident note.
+Keep: a three-line postmortem or a changelog line.
 
 Edge: posts under five words never reach this question, so "This." stays on every preset, including Zen. Zen's floor is 1.5. Light, Balanced, and Strict leave the floor off.
 
@@ -94,7 +104,7 @@ Edge: posts under five words never reach this question, so "This." stays on ever
 
 A reply inside a thread that only agrees, flatters, or pivots into a generic list. The bar is lower than the main slop bar while that reply is judged. A reply that answers the parent is not a bot reply.
 
-Hide: "Great question. First, mindset. Second, systems. Third, consistency." under someone else's post.
+Hide: "Great question. Totally agree. First, mindset. Second, systems. Third, consistency." under a technical post.
 
 Keep: "The null is on line 214. The map is missing the default key."
 

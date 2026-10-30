@@ -35,7 +35,7 @@ describe('flagged account settings section', () => {
     const html = markup();
     expect(html).toContain('Flagged accounts');
     expect(html).toContain('After an account has 3 slop or ad posts hidden');
-    expect(html).toContain('No flagged accounts yet');
+    expect(html).toContain('No accounts have crossed the slop or ad bar');
     expect(html).toContain('Nothing is muted or blocked');
     expect(html).not.toContain('type="number"');
   });

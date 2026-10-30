@@ -26,7 +26,7 @@ export function RepeatAccountsView({
       </p>
 
       {accounts.length === 0 ? (
-        <p className="empty">No flagged accounts yet.</p>
+        <p className="empty">No accounts have crossed the slop or ad bar.</p>
       ) : (
         <div className="accounts">
           {accounts.map((account) => (

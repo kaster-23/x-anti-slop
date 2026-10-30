@@ -21,7 +21,7 @@ describe('preset picker', () => {
     );
     expect(markup).toContain('Light');
     expect(markup).toContain('Hides only obvious filler');
-    expect(markup).toContain('including ones written with AI');
+    expect(markup).toContain('Useful AI-written posts, with the pill');
     expect(markup).toContain('A useful post stays, including one written with AI.');
     expect(markup).toContain('You will see');
     expect(markup).toContain('You won&#x27;t see');

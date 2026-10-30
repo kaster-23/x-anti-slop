@@ -409,6 +409,7 @@ const posts: CorpusPost[] = [
     { model: reading({ ads: 0.24, slop: 0.1, quality: 2.5 }) },
   ),
   ...aiWrittenCorpus(),
+  ...techFeedCorpus(),
 ];
 
 /**
@@ -509,6 +510,178 @@ function aiWrittenCorpus(): CorpusPost[] {
       }),
     );
   });
+  return rows;
+}
+
+/**
+ * Tech-feed posts. Hard negatives look like the other class: a terse trace or a
+ * "this changes everything" line that still has a number stays up; a launch or
+ * a reply with no bug, number, paper, or diff goes. Pill labels follow the
+ * default 50% floor and only apply when the post stays up.
+ */
+function techFeedCorpus(): CorpusPost[] {
+  const keep = [
+    'Trace from the worker. TypeError at queue.ts:214. Cannot read properties of undefined (reading map). The batch was empty because the abort landed first.',
+    'Eval on the same 500-prompt set. Pass rate 61.2 to 74.8. p50 latency 107ms, p95 128ms. No other change in the harness.',
+    'Changelog 2.3.1. Removed the forced tutorial, fixed the focus ring, and stopped retrying 4xx. The file is 1.8 megabytes.',
+    'arXiv abstract, one link: https://arxiv.org/abs/2401.00001. They report a 3.1 point gain on the held-out split and publish the seed.',
+    'Release 1.9 is out. Offline drafts sync on reconnect. We deleted the phone-home call. The migration is one column add.',
+    'lgtm with a nit. the race is on the map insert, not the lock. repro on the second tab only. the first tab is fine.',
+    'The guard is if (batch.length === 0) return. Without it the reducer throws on an empty flush. The patch is four lines.',
+    'Postmortem. 09:14 deploy, 09:18 error spike on the cert path, 09:26 rollback, 09:31 recovered. Clock skew was 2 seconds.',
+    'The paper table 3 is the one that matters. F1 moves from 0.71 to 0.78 when the negative set includes hard near-duplicates.',
+    'Shipped the export they asked for. It remembers the last folder. Version 2.4. No account and no upsell. Desktop build is 39 dollars.',
+    'Thread on the prefetch margin. A cold call is about 200ms, warm p90 is 128ms, so we queue one screen ahead and keep four requests in flight.',
+    'People will call this a paradigm shift. The only change is the retry budget, from 3 to 1, and p95 dropped from 800ms to 220ms.',
+  ];
+  const aiKeep = [
+    'Session tokens rotate every 12 hours and bind to the device id. p95 auth moved from 800ms to 220ms. A model drafted the note. The trace checked it.',
+    'Benchmark note, model-drafted and then checked. Same 500-prompt set, pass rate 61.2 to 74.8, p95 128ms. The harness diff is three lines.',
+    'Model-written summary of the paper. Held-out gain is 3.1 points. Seed 17. The abstract is the only link: https://arxiv.org/abs/2401.00002.',
+    'Release notes, written with a model and then edited. Version 1.9 adds offline drafts and removes the phone-home call. Patch size 1.8 megabytes.',
+  ];
+  const obvious = [
+    'AI will replace you by Friday. Here are 10 tips to survive. Wake up earlier. Post more. Comment READY. The ones who hesitate are already gone.',
+    'Comment PROMPT and I will send the agent stack that prints clients. This changes everything for builders. No benchmark, just the mindset. Follow for part two.',
+    'We just launched and this changes everything. The future of engineering is here. I will not share a version, a diff, or a metric. Link in bio.',
+    '10 tips for prompt engineers. Be consistent. Think bigger. Ship daily. Trust the process. Engage harder. Follow for the rest of the thread.',
+    'Prompt-bro hour. Comment AGENT and I will send the stack. No architecture, no eval, no number. The algorithm is watching you right now.',
+    'Giveaway for builders. Follow, repost, and tag two cofounders. Winner gets the alpha prompt list. Closes Friday. Not a product. A funnel.',
+    'The token launches at 4. Contract in the next reply. NFA. We are all going to make it. Builders who fade this will be exit liquidity.',
+  ];
+  const replyLoud =
+    'Great question. Totally agree. First, mindset. Second, systems. Third, consistency. This is the future of the stack. Thoughts?';
+  const quieter = [
+    'We launched. This changes everything. The future of engineering starts today. Link in bio. I cannot share the diff yet, but trust the drop.',
+    'A few notes on prompting. Start with intent, then constraints, then tone. I will expand this into a thread if it lands. Bookmark it for later.',
+    'Early on a new chain. I will not post the contract yet. Builders who know, know. NFA, but the chart is the whole pitch.',
+  ];
+  const replyQuiet =
+    'Absolutely. Building on your point, have you considered a framework? Happy to share a breakdown. Clarity beats intensity. Follow for more.';
+  const strictOnly = [
+    'The unlock is distribution, not the model. Most builders are not ready for that sentence. Sit with it, then follow for the thread.',
+    'This benchmark thread is embarrassing and the author should sit down. I am not going to quote a number. Just ratio it and move on.',
+  ];
+
+  const rows: CorpusPost[] = [];
+  keep.forEach((text, index) => {
+    rows.push(
+      post(`tech-keep-${index + 1}`, 'tech', text, SHOW, {
+        model: reading({ slop: 0.16, ads: 0.14, ragebait: 0.08, quality: 2.7, humanVeto: true }),
+        pill: false,
+      }),
+    );
+  });
+  const aiScores = [0.74, 0.82, 0.69, 0.91];
+  aiKeep.forEach((text, index) => {
+    rows.push(
+      post(`tech-ai-${index + 1}`, 'tech', text, SHOW, {
+        model: reading({
+          slop: 0.12,
+          ads: 0.1,
+          quality: 2.6,
+          aiWritten: aiScores[index] ?? 0.8,
+          humanVeto: true,
+        }),
+        pill: true,
+      }),
+    );
+  });
+  rows.push(
+    post(
+      'tech-ai-under',
+      'tech',
+      'The null is on line 214 of the map. The default key was missing, so the empty batch threw before the retry. I wrote this one myself.',
+      SHOW,
+      { model: reading({ slop: 0.11, aiWritten: 0.49, quality: 2.6, humanVeto: true }), pill: false },
+    ),
+  );
+  obvious.forEach((text, index) => {
+    rows.push(
+      post(`tech-obvious-${index + 1}`, 'tech', text, ALL, {
+        model: reading({ slop: 0.94, ads: 0.93, ragebait: 0.4, aiWritten: 0.84, quality: 0.5 }),
+        pill: false,
+      }),
+    );
+  });
+  rows.push(
+    post('tech-reply-loud', 'tech', replyLoud, ALL, {
+      isReply: true,
+      parentText: 'Where is the null coming from in the batch reducer?',
+      model: reading({ slop: 0.86, quality: 0.8, aiWritten: 0.7, botReply: true }),
+      pill: false,
+    }),
+  );
+  const quieterScores = [
+    { slop: 0.4, ads: 0.86, ragebait: 0.1 },
+    { slop: 0.78, ads: 0.3, ragebait: 0.1 },
+    { slop: 0.3, ads: 0.8, ragebait: 0.12 },
+  ];
+  quieter.forEach((text, index) => {
+    const scores = quieterScores[index] ?? { slop: 0.78, ads: 0.8, ragebait: 0.1 };
+    rows.push(
+      post(`tech-quiet-${index + 1}`, 'tech', text, NOT_LIGHT, {
+        model: reading({ ...scores, quality: 0.9, aiWritten: 0.6 }),
+        pill: false,
+      }),
+    );
+  });
+  rows.push(
+    post('tech-reply-quiet', 'tech', replyQuiet, NOT_LIGHT, {
+      isReply: true,
+      parentText: 'How should we set the retry budget on the worker?',
+      model: reading({ slop: 0.62, quality: 1.2, aiWritten: 0.55, botReply: true }),
+      pill: false,
+    }),
+  );
+  strictOnly.forEach((text, index) => {
+    rows.push(
+      post(`tech-strict-${index + 1}`, 'tech', text, STRICT_UP, {
+        model: reading({
+          slop: index === 0 ? 0.64 : 0.2,
+          ragebait: index === 0 ? 0.1 : 0.62,
+          ads: 0.1,
+          quality: 1.6,
+        }),
+        pill: false,
+      }),
+    );
+  });
+  rows.push(
+    post(
+      'tech-zen-low',
+      'tech',
+      'Interesting repo energy. Might look later. Or not. Cool cool. Anyway. Have a good build and a quieter timeline.',
+      ZEN,
+      { model: reading({ slop: 0.22, quality: 0.8, aiWritten: 0.2 }), pill: false },
+    ),
+  );
+  rows.push(
+    post(
+      'tech-promo-good',
+      'tech',
+      'Promoted. Release 1.4.2 fixes the retry loop and cuts p95 from 800ms to 220ms. Notes are one page. No subscription.',
+      ZEN,
+      {
+        promoted: true,
+        model: reading({ slop: 0.12, ads: 0.22, quality: 2.6, aiWritten: 0.4, humanVeto: true }),
+        pill: false,
+      },
+    ),
+  );
+  rows.push(
+    post(
+      'tech-promo-pitch',
+      'tech',
+      'Promoted. Quit your job with this prompt pack. Comment MONEY. The future of engineering is a link in the bio.',
+      NOT_LIGHT,
+      {
+        promoted: true,
+        model: reading({ slop: 0.4, ads: 0.88, quality: 0.4, aiWritten: 0.8 }),
+        pill: false,
+      },
+    ),
+  );
   return rows;
 }
 

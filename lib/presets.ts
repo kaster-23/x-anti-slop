@@ -124,12 +124,12 @@ export const PRESETS: readonly Preset[] = [
     name: 'Light',
     description: 'Hides only obvious filler. Rage bait, ads, promoted posts, and useful AI-written posts stay up.',
     willSee: [
-      'Arguments, news, product launches, and ads',
-      'Useful posts, including ones written with AI',
-      'Short replies and posts with a few emoji or links',
+      'Release notes, papers, and benchmarks with numbers',
+      'Ads, promoted posts, and technical threads',
+      'Useful AI-written posts, with the pill',
     ],
     wontSee: [
-      'Obvious filler, whoever wrote it',
+      'Obvious AI-will-replace-you bait and 10-tips threads',
       'Hashtag piles, emoji piles, link dumps, and all-caps shouting',
     ],
     values: {
@@ -161,14 +161,14 @@ export const PRESETS: readonly Preset[] = [
     name: 'Balanced',
     description: 'Hides clear filler, rage bait, and ads. A useful post stays, including one written with AI.',
     willSee: [
-      'News, technical posts, and real arguments',
-      'A useful post, even when an AI wrote it',
-      'Posts with a few emoji, hashtags, or source links',
+      'Release notes, papers, postmortems, and real launches',
+      'Technical threads and benchmarks with numbers',
+      'Useful AI-written posts, with the pill',
     ],
     wontSee: [
-      'Filler, rage bait, and pitches, whoever wrote them',
-      'Get-rich, casino, and empty engagement bait',
-      'Hashtag piles, emoji piles, link dumps, and shouting',
+      'AI-will-replace-you bait and 10-tips threads',
+      'Comment-for-the-prompt farming, giveaways, and crypto shilling',
+      'Ratio-bait dunks',
     ],
     values: balancedValues(),
   },
@@ -177,13 +177,13 @@ export const PRESETS: readonly Preset[] = [
     name: 'Strict',
     description: 'Hides more slop, rage bait, and ads, and flags repeat accounts sooner.',
     willSee: [
-      'Posts with specific names, numbers, or a real point',
-      'A useful draft, even when a model wrote it',
-      'A sharp criticism that brings evidence',
+      'Benchmarks with numbers, postmortems, and papers',
+      'A real launch that says what shipped',
+      'Useful AI-written posts, with the pill',
     ],
     wontSee: [
-      'Borderline filler, quieter rage bait, and softer pitches',
-      'Bot-style replies that only agree or pivot',
+      'Quieter 10-tips threads and softer pitches',
+      'Reply-guy agreement under a technical post',
       'Repeat accounts after two slop or ad hides',
     ],
     values: {
@@ -216,12 +216,12 @@ export const PRESETS: readonly Preset[] = [
     description:
       'Hides borderline slop, engagement bait, promoted posts, and low-value posts. Adds model calls and may delay posts.',
     willSee: [
-      'Specific, useful posts, including ones written with AI',
-      'A normal reply that actually answers',
+      'Release notes, papers, and technical threads with real detail',
+      'Useful AI-written posts, with the pill',
     ],
     wontSee: [
-      'Borderline slop, bait, and low-value filler',
-      'Every post X marks as promoted',
+      'Borderline bait, 10-tips threads, and low-value filler',
+      'Every post marked promoted, including a real launch',
       'New posts until a verdict arrives',
     ],
     values: {
