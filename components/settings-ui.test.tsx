@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { ConfidenceSlider } from './LabeledSlider';
 import { InfoTip } from './InfoTip';
 import { PresetPicker } from './PresetPicker';
 
@@ -79,5 +80,28 @@ describe('info tooltip', () => {
     expect(markup).toContain('data-tip="slop"');
     expect(markup).toContain('Hides writing that reads like a model.');
     expect(markup).toContain('Example: Let’s unpack this.');
+  });
+
+  test('puts the help mark after the title and keeps the value on the right', () => {
+    const markup = html(
+      createElement(ConfidenceSlider, {
+        id: 'signal-slop',
+        label: 'AI slop',
+        explanation: 'Hide filler.',
+        example: 'Example: unpack.',
+        enabled: true,
+        onEnabled: () => {},
+        threshold: 0.7,
+        onThreshold: () => {},
+      }),
+    );
+    const title = markup.indexOf('AI slop');
+    const mark = markup.indexOf('tip-btn');
+    const value = markup.indexOf('slider-value');
+    expect(title).toBeGreaterThan(-1);
+    expect(mark).toBeGreaterThan(title);
+    expect(value).toBeGreaterThan(mark);
+    expect(markup).toContain('>70%<');
+    expect(markup).not.toContain('align-end');
   });
 });
