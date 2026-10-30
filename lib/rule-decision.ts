@@ -1,3 +1,4 @@
+import { aiWrittenHide } from './ai-written';
 import { slopThresholdsOf } from './defaults';
 import { slopExceeds, type SlopCategory } from './detect/score';
 import { prefilter, type PrefilterPost } from './prefilter';
@@ -7,6 +8,8 @@ import type { Settings } from './types';
 /** What a model call would return. The eval supplies these instead of the network. */
 export interface ModelReading {
   slop?: number;
+  /** How the text was produced, 0–1. Separate from slop, which judges value. */
+  aiWritten?: number;
   ragebait?: number;
   ads?: number;
   /** 0–3. Omitted means the quality question was not asked. */
@@ -82,5 +85,7 @@ export function decidePost(post: RulePost, settings: Settings): RuleOutcome {
   ) {
     return { hide: true, reason: 'Low quality', stage: 'model' };
   }
+  const authored = aiWrittenHide(reading.aiWritten, settings);
+  if (authored) return { hide: true, reason: authored.label, stage: 'model' };
   return { hide: false, reason: 'Kept', stage: 'model' };
 }

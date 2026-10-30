@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { browser } from '#imports';
 import { InfoTip } from '@/components/InfoTip';
 import {
+  AI_WRITTEN_HELP,
+  AI_WRITTEN_HIDE_HELP,
   ALLOW_HELP,
   BLOCK_HELP,
   HIDE_MODE_HELP,
@@ -19,6 +21,7 @@ import { ConfidenceSlider, LabeledSlider, ToggleRow } from '@/components/Labeled
 import { PresetPicker } from '@/components/PresetPicker';
 import { resetOverlayPosition } from '@/lib/overlay-store';
 import { loadSettings, saveSettings } from '@/lib/settings';
+import { AI_WRITTEN_FLOORS, type AiWrittenFloor } from '@/lib/ai-written';
 import { activeKey } from '@/lib/defaults';
 import { customSnapshot, presetChangePatch, presetName, presetPatch } from '@/lib/presets';
 import { PROVIDERS, QUALITY_LEVELS, formatCost } from '@/lib/provider';
@@ -222,6 +225,55 @@ export default function App() {
             />
           );
         })}
+
+        <h3>
+          <span className="field-label">
+            AI-written label
+            <InfoTip
+              label={AI_WRITTEN_HELP.label}
+              explanation={AI_WRITTEN_HELP.explanation}
+              example={AI_WRITTEN_HELP.example}
+            />
+          </span>
+        </h3>
+        <div className="toggle-list">
+          <ToggleRow
+            id="ai-written-show"
+            label="Show the label"
+            explanation={AI_WRITTEN_HELP.explanation}
+            example={AI_WRITTEN_HELP.example}
+            tipKey="ai-written"
+            checked={settings.aiWritten.show}
+            onChange={(show) => update({ aiWritten: { ...settings.aiWritten, show } })}
+          />
+        </div>
+        <div className="field-label">
+          <span id="ai-written-floor-label">Show from</span>
+        </div>
+        <div className="seg" role="group" aria-labelledby="ai-written-floor-label">
+          {AI_WRITTEN_FLOORS.map((floor) => (
+            <button
+              key={floor}
+              type="button"
+              aria-pressed={settings.aiWritten.floor === floor}
+              onClick={() => update({ aiWritten: { ...settings.aiWritten, floor: floor as AiWrittenFloor } })}
+            >
+              {Math.round(floor * 100)}%
+            </button>
+          ))}
+        </div>
+        <p className="hint">Visible posts at or above this get a small AI label. Hidden posts do not.</p>
+        <div className="toggle-list">
+          <ToggleRow
+            id="ai-written-hide"
+            label={AI_WRITTEN_HIDE_HELP.label}
+            explanation={AI_WRITTEN_HIDE_HELP.explanation}
+            example={AI_WRITTEN_HIDE_HELP.example}
+            tipKey="ai-written-hide"
+            checked={settings.hideAiWritten}
+            onChange={(hideAiWritten) => update({ hideAiWritten })}
+          />
+        </div>
 
         <div className="toggle-list">
           <ToggleRow

@@ -65,6 +65,10 @@ describe('preset definitions', () => {
     expect(light.signals.ragebait.enabled).toBe(false);
     expect(light.signals.ads.enabled).toBe(false);
     expect(light.hidePromoted).toBe(false);
+    expect(light.hideAiWritten).toBe(false);
+    expect(balanced.hideAiWritten).toBe(false);
+    expect(strict.hideAiWritten).toBe(false);
+    expect(zen.hideAiWritten).toBe(false);
     expect(light.repeatThreshold).toBeGreaterThan(balanced.repeatThreshold);
 
     expect(strict.signals.ragebait.enabled).toBe(true);

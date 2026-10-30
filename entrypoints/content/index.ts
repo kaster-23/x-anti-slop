@@ -16,6 +16,7 @@ import { meterGlassTheme, readFeedTheme } from '@/lib/card-style';
 import { paintFeedCard, restyleFeedCards, setCardAppearance } from './cards';
 import { activeDusts, cancelAllDusts, cancelDust, playDust } from './dust';
 import { hideMotion, isOnScreen } from '@/lib/hide-motion';
+import { clearAiWrittenPill, mountAiWrittenPill } from './ai-pill';
 import { mountMeter } from './meter';
 import {
   autoHiddenReason,
@@ -446,6 +447,7 @@ export default defineContentScript({
         noteFlaggedHidden(tweet, settings.repeatThreshold, verdict.reason);
       } else {
         unmask(article);
+        mountAiWrittenPill(article, verdict.scores, settings);
         mountLabels(article, tweet, verdict, settings.labeling);
       }
     }
@@ -515,6 +517,7 @@ export default defineContentScript({
       cell.querySelector('.ct-placeholder')?.remove();
       cell.querySelector('.ct-suggest')?.remove();
       cell.querySelector('.ct-labelbar')?.remove();
+      clearAiWrittenPill(articleFromCell(cell));
     }
 
     function unmaskById(id: string) {
@@ -523,6 +526,7 @@ export default defineContentScript({
 
     function hide(article: HTMLElement, tweet: TweetInput, verdict: Verdict, allowAnimation = false) {
       const id = tweet.id;
+      clearAiWrittenPill(article);
       article.dataset.ctState = 'hidden';
       const cell = cellOf(article);
       cell.classList.remove('ct-pending');
@@ -613,7 +617,7 @@ export default defineContentScript({
       )) {
         clearCell(cell);
       }
-      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest, .ct-labelbar')) {
+      for (const node of document.querySelectorAll('.ct-placeholder, .ct-suggest, .ct-labelbar, .ct-ai-pill')) {
         node.remove();
       }
       for (const article of document.querySelectorAll<HTMLElement>(TWEET_SELECTOR)) {
@@ -771,8 +775,14 @@ function needsModel(s: Settings): boolean {
   return (
     Object.values(s.signals).some((c) => c.enabled) ||
     s.minQuality > 0 ||
-    activeCustomFilters(s).length > 0
+    activeCustomFilters(s).length > 0 ||
+    s.aiWritten.show ||
+    s.hideAiWritten
   );
+}
+
+function articleFromCell(cell: HTMLElement): HTMLElement {
+  return cell.matches?.(TWEET_SELECTOR) ? cell : (cell.querySelector(TWEET_SELECTOR) ?? cell);
 }
 
 function mutationMatters(mutations: MutationRecord[]): boolean {

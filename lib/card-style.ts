@@ -8,6 +8,7 @@
 
 export type CardTagId =
   | 'slop'
+  | 'aiWritten'
   | 'ragebait'
   | 'ad'
   | 'promotional'
@@ -54,6 +55,7 @@ interface TagSpec extends CardTag {
 
 export const CARD_TAGS: readonly TagSpec[] = [
   { id: 'slop', label: 'AI slop', reasons: ['ai slop'] },
+  { id: 'aiWritten', label: 'AI written', reasons: ['ai written'] },
   { id: 'ragebait', label: 'Rage bait', reasons: ['rage bait'] },
   { id: 'ad', label: 'Engagement bait', reasons: ['ad'] },
   { id: 'promotional', label: 'Ads', reasons: ['promotional'] },
@@ -76,6 +78,7 @@ export const CARD_TAGS: readonly TagSpec[] = [
  */
 export const DEFAULT_TAG_COLORS: Record<CardTagId, string> = {
   slop: '#8aa4b8',
+  aiWritten: '#9aa3ad',
   ragebait: '#c47a72',
   ad: '#c4a36a',
   promotional: '#a89468',

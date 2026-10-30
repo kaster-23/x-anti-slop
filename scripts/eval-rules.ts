@@ -5,6 +5,7 @@
  *   pnpm eval:rules
  */
 import { FILTER_CORPUS, type CorpusPost, type Expectation } from '../test/fixtures/filter-corpus';
+import { shouldShowAiPill } from '../lib/ai-written';
 import { DEFAULT_SETTINGS } from '../lib/defaults';
 import { presetPatch } from '../lib/presets';
 import { decidePost, type RulePost } from '../lib/rule-decision';
@@ -106,6 +107,44 @@ function printTable(title: string, rows: PresetScore[]): void {
   }
 }
 
+export interface PillScore {
+  precision: number;
+  recall: number;
+  shown: number;
+  expected: number;
+  falsePositives: string[];
+  falseNegatives: string[];
+}
+
+/** Pill precision and recall at the default floor, label on, hide off. */
+export function scorePills(settings: Settings = settingsFor('balanced')): PillScore {
+  const falsePositives: string[] = [];
+  const falseNegatives: string[] = [];
+  let shown = 0;
+  let expected = 0;
+  let truePositives = 0;
+  for (const post of FILTER_CORPUS) {
+    if (post.blocked) settings.blocklist = [post.author ?? 'spammer'];
+    else settings.blocklist = [];
+    const outcome = decidePost(asRule(post), settings);
+    const predicted = shouldShowAiPill(post.model?.aiWritten, settings, outcome.hide);
+    const want = post.pill === true;
+    if (want) expected += 1;
+    if (predicted) shown += 1;
+    if (predicted && want) truePositives += 1;
+    if (predicted && !want) falsePositives.push(post.id);
+    if (!predicted && want) falseNegatives.push(post.id);
+  }
+  return {
+    precision: shown === 0 ? 1 : truePositives / shown,
+    recall: expected === 0 ? 1 : truePositives / expected,
+    shown,
+    expected,
+    falsePositives,
+    falseNegatives,
+  };
+}
+
 export function mismatches(rows: PresetScore[]): string[] {
   return rows.flatMap((row) => [
     ...row.falsePositives.map((item) => `${row.preset} false positive ${item}`),
@@ -130,11 +169,23 @@ for (const tag of tags) {
   );
 }
 
+const pills = scorePills();
+console.log('\nAI-written pill (label on, show from 50%, hide off)');
+console.log('precision  recall  shown  expected');
+console.log(
+  `${pct(pills.precision).padStart(9)}  ${pct(pills.recall).padStart(6)}  ${String(pills.shown).padStart(5)}  ${String(pills.expected).padStart(8)}`,
+);
+
 const problems = mismatches(current);
-if (problems.length > 0) {
-  console.log(`\n${problems.length} mismatches`);
-  for (const line of problems.slice(0, 40)) console.log(line);
+const pillProblems = [
+  ...pills.falsePositives.map((id) => `pill false positive ${id}`),
+  ...pills.falseNegatives.map((id) => `pill false negative ${id}`),
+];
+if (problems.length > 0 || pillProblems.length > 0) {
+  console.log(`\n${problems.length} hide mismatches, ${pillProblems.length} pill mismatches`);
+  for (const line of [...problems, ...pillProblems].slice(0, 40)) console.log(line);
   process.exitCode = 1;
 } else {
   console.log('\nEvery labeled post matches the preset that should hide or keep it.');
+  console.log('The AI-written pill matches the labeled visible posts.');
 }

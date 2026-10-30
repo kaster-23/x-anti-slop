@@ -13,6 +13,7 @@ import { localSignature } from './prefilter';
 import { questionSignature } from './signature';
 import { redactSecrets } from './redact';
 import { QUEUE_CONCURRENCY, RequestQueue } from './request-queue';
+import { aiWrittenHide, aiWrittenScore } from './ai-written';
 import { activeKey, slopThresholdsOf } from './defaults';
 import { EMPTY_STATS, statsStore } from './settings';
 import { featureVector, judgeSlop, resolveWeights, slopExceeds, type SlopCategory } from './detect/score';
@@ -141,6 +142,13 @@ function decide(id: string, entry: CacheEntry, settings: Settings): Verdict {
   if (settings.minQuality > 0 && entry.quality !== undefined && entry.quality < settings.minQuality) {
     verdict.filtered = true;
     verdict.reason = `Low quality (${entry.quality.toFixed(1)}/3)`;
+  }
+  if (!verdict.filtered) {
+    const authored = aiWrittenHide(aiWrittenScore(entry.scores), settings);
+    if (authored) {
+      verdict.filtered = true;
+      verdict.reason = `${authored.label} (${Math.round(authored.score * 100)}%)`;
+    }
   }
   return verdict;
 }

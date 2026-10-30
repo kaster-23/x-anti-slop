@@ -1,5 +1,6 @@
 /** Free of extension-runtime imports, so build scripts and the eval harness
  *  can use these outside the browser. */
+import { DEFAULT_AI_WRITTEN } from './ai-written';
 import { DEFAULT_CARD_APPEARANCE } from './card-style';
 import { djb2 } from './hash';
 import {
@@ -28,6 +29,8 @@ export const DEFAULT_SETTINGS: Settings = {
   replyBotThreshold: DEFAULT_REPLY_BOT_THRESHOLD,
   slopWeights: null,
   labeling: true,
+  aiWritten: { ...DEFAULT_AI_WRITTEN },
+  hideAiWritten: false,
 
   minQuality: 0,
 

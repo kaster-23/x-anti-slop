@@ -9,6 +9,8 @@ export interface CorpusPost {
   text: string;
   author?: string;
   promoted?: boolean;
+  /** Expected pill at the default 50% floor, with the label on and hide off. */
+  pill?: boolean;
   hasImage?: boolean;
   hasVideo?: boolean;
   hasGif?: boolean;
@@ -406,7 +408,109 @@ const posts: CorpusPost[] = [
     SHOW,
     { model: reading({ ads: 0.24, slop: 0.1, quality: 2.5 }) },
   ),
+  ...aiWrittenCorpus(),
 ];
+
+/**
+ * Posts across the 2x2. Authorship and value are separate scores.
+ * The pill is expected only when the post stays up and the AI-written score
+ * clears the default 50% floor.
+ */
+function aiWrittenCorpus(): CorpusPost[] {
+  const aiSlop = [
+    "Let's unpack this. The real lesson is the mindset, not the work. Most people are not ready. Agree?",
+    'Here is the framework that actually matters. Elevate. Align. Execute. Share this if it landed for you.',
+    'The tapestry of modern work is a nuanced paradigm. Delve in. Repost if you needed the reminder today.',
+    'Not gonna lie: consistency is the unlock. Drop a yes if this was the sign you were waiting for today.',
+    'Seven soft lessons about focus. Wake with intention. Drink water. Win the morning. Follow for part two.',
+    'Stop scrolling and hear this. The winners decide, then they act, then they iterate. Simple. Bookmark it.',
+    'A short thread on becoming undeniable. First identity. Second habits. Third environment. Like and follow.',
+    'Let me be direct. The game changed, and the old way already lost. Sit with that. Thoughts are welcome.',
+  ];
+  const aiValue = [
+    'Rotated session tokens every 12 hours and bound them to the device id. p95 auth fell from 800ms to 220ms.',
+    'The March changelog names three edits: the retry loop, two unused flags, and a p95 cut from 800ms to 220ms.',
+    'Postmortem, dull on purpose. A 2 second clock skew dropped 4 percent of webhooks. We alert on skew now.',
+    'Version 2.3 adds offline drafts and removes the forced tutorial. The patch is 1.8 megabytes and free.',
+    'Customer call notes. They did not want a model. They wanted export to remember the last folder they used.',
+    'The null is on line 214. The map is missing the default key, so an empty session throws before the retry.',
+    'Vendored the cert, pinned the dependency, and alert if it expires inside 14 days. The check runs nightly.',
+  ];
+  const humanSlop = [
+    'Wow. Just wow. Honestly. Yeah. So true. Follow for more of whatever this feeling is supposed to be.',
+    'This. All of this. Nothing else to add. If you know you know. Stay on the timeline and keep scrolling.',
+    'Can we talk about how wild that was. No but seriously. I have no words. Just felt like posting tonight.',
+    'Mood. That is the whole post. Do not ask me to explain it. Some days are just a shrug and a timeline.',
+    'Not me reading this twice and still having nothing. Anyway. Carry on. I will be here doing the same.',
+    'Big if true. Huge if true. I will not check. Someone else can look it up and report back to the group.',
+    'I feel this in my bones and I refuse to say why. Goodnight to everyone who also has no details to share.',
+    'Literally nothing happened and I am posting about it. The bar is on the floor. See you in the replies.',
+  ];
+  const humanValue = [
+    'The bug was a stale closure. p95 fell from 800ms to 220ms after we stopped capturing the old request.',
+    'Night bus is the only way home. The shift ends at 11:40pm and the last bus leaves the clinic at 11:10pm.',
+    'Soak the beans overnight, salt the water, and do not add the acid until they are tender. That is the trick.',
+    'Build 1482 fixes the launch crash on 2019 hardware. The patch is free and does not ask for an account.',
+    'She said the water was safe on Monday. The lab report from Sunday says otherwise. I attached both pages.',
+    'The fare would go from 64 to 81. I oppose it. The committee memo and the ridership table are linked once.',
+    'Interview note: ask what they deleted. The best candidate had removed a queue nobody remembered owning.',
+    'Handoff is three lines. What broke, what we rolled back, and who is awake. Last night: the cert, Priya.',
+  ];
+
+  const rows: CorpusPost[] = [];
+  aiSlop.forEach((text, index) => {
+    rows.push(
+      post(`ai-slop-${index + 1}`, 'ai-slop', text, ALL, {
+        model: reading({ slop: 0.96, aiWritten: 0.86, quality: 0.6 }),
+        pill: false,
+      }),
+    );
+  });
+  aiValue.forEach((text, index) => {
+    const aiWritten = [0.72, 0.8, 0.84, 0.88, 0.91, 0.67, 0.77][index] ?? 0.8;
+    rows.push(
+      post(`ai-value-${index + 1}`, 'ai-value', text, SHOW, {
+        model: reading({ slop: 0.12, aiWritten, quality: 2.6, humanVeto: true }),
+        pill: true,
+      }),
+    );
+  });
+  rows.push(
+    post(
+      'ai-value-low',
+      'ai-value',
+      'The export button now remembers the last folder. We shipped it Tuesday after the support queue asked twice.',
+      SHOW,
+      { model: reading({ slop: 0.14, aiWritten: 0.49, quality: 2.5, humanVeto: true }), pill: false },
+    ),
+  );
+  rows.push(
+    post(
+      'ai-value-floor',
+      'ai-value',
+      'Pinned the certificate dependency and alert if it expires inside 14 days. The runbook is one page.',
+      SHOW,
+      { model: reading({ slop: 0.11, aiWritten: 0.5, quality: 2.7, humanVeto: true }), pill: true },
+    ),
+  );
+  humanSlop.forEach((text, index) => {
+    rows.push(
+      post(`human-slop-${index + 1}`, 'human-slop', text, ALL, {
+        model: reading({ slop: 0.95, aiWritten: 0.08, quality: 0.4 }),
+        pill: false,
+      }),
+    );
+  });
+  humanValue.forEach((text, index) => {
+    rows.push(
+      post(`human-value-${index + 1}`, 'human-value', text, SHOW, {
+        model: reading({ slop: 0.1, aiWritten: index === 0 ? 0.49 : 0.06, quality: 2.6, humanVeto: true }),
+        pill: false,
+      }),
+    );
+  });
+  return rows;
+}
 
 export const FILTER_CORPUS: readonly CorpusPost[] = posts;
 

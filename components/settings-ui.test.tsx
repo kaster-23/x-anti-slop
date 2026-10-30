@@ -19,8 +19,9 @@ describe('preset picker', () => {
       }),
     );
     expect(markup).toContain('Light');
-    expect(markup).toContain('Hides only obvious AI slop');
-    expect(markup).toContain('A promoted post stays if the writing is useful.');
+    expect(markup).toContain('Hides only obvious filler');
+    expect(markup).toContain('including ones written with AI');
+    expect(markup).toContain('A useful post stays, including one written with AI.');
     expect(markup).toContain('You will see');
     expect(markup).toContain('You won&#x27;t see');
     expect(markup).toContain('Hides more slop, rage bait, and ads');

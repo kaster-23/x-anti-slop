@@ -89,6 +89,28 @@ describe('buildQuestions', () => {
     expect(styleQuestionCount()).toBe(30);
     expect(Object.keys(questions)).toContain('ragebait');
     expect(Object.keys(questions)).toContain('ad');
+    expect(questions.aiWritten?.type).toBe('noul');
+  });
+
+  test('asks how the text was produced, and skips it when the label and the hide are both off', () => {
+    const on = buildQuestions(DEFAULT_SETTINGS).aiWritten;
+    expect(on?.type).toBe('noul');
+    if (on?.type === 'noul') {
+      expect(on.instructions.toLowerCase()).toContain('how the text was produced');
+      expect(on.criteria?.false.toLowerCase()).toContain('person');
+    }
+    const off = buildQuestions({
+      ...DEFAULT_SETTINGS,
+      aiWritten: { ...DEFAULT_SETTINGS.aiWritten, show: false },
+      hideAiWritten: false,
+    });
+    expect(off.aiWritten).toBeUndefined();
+    const hideOnly = buildQuestions({
+      ...DEFAULT_SETTINGS,
+      aiWritten: { ...DEFAULT_SETTINGS.aiWritten, show: false },
+      hideAiWritten: true,
+    });
+    expect(hideOnly.aiWritten).toBeDefined();
   });
 
   test('asks ad whenever slop is on, so engagement-bait filed as an ad is scored', () => {
